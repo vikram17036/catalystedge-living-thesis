@@ -234,28 +234,47 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
     try:
         client = get_supabase_client()
         client.postgrest.auth(access_token)
-        
+
+        # History-only fields — not columns on public.theses
+        payload = dict(updates)
+        change_reason = payload.pop("change_reason", None)
+        row_updates = {k: v for k, v in payload.items() if v is not None}
+        if not row_updates:
+            return None
+
         # Get current thesis for history
-        current = client.table("theses").select("*").eq("id", thesis_id).single().execute()
-        
+        current = client.table("theses").select("*").eq("id", thesis_id).eq("user_id", user_id).single().execute()
+        if not current.data:
+            return None
+
         # Determine change type
         change_type = "updated"
-        if "conviction_level" in updates and updates["conviction_level"] != current.data.get("conviction_level"):
+        if "conviction_level" in row_updates and row_updates["conviction_level"] != current.data.get("conviction_level"):
             change_type = "conviction_changed"
-        if updates.get("status") == "invalidated":
+        if row_updates.get("status") == "invalidated":
             change_type = "invalidated"
-        if updates.get("status") == "exited":
+        if row_updates.get("status") == "exited":
             change_type = "exited"
-        
+
         # Update thesis
-        response = client.table("theses").update(updates).eq("id", thesis_id).eq("user_id", user_id).execute()
+        response = (
+            client.table("theses")
+            .update(row_updates)
+            .eq("id", thesis_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
         thesis = response.data[0] if response.data else None
-        
+
         # Create history entry
         if thesis:
             _create_thesis_history(
-                user_id, access_token, thesis_id, thesis, 
-                change_type, updates.get("change_reason")
+                user_id,
+                access_token,
+                thesis_id,
+                thesis,
+                change_type,
+                change_reason,
             )
             try:
                 from stocksense.memory.indexer import index_thesis
@@ -263,7 +282,7 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
                 index_thesis(user_id, thesis)
             except Exception as idx_err:
                 logger.warning(f"thesis memory index skipped: {idx_err}")
-        
+
         return thesis
     except Exception as e:
         logger.error(f"Thesis update error: {e}")

@@ -281,8 +281,9 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       setStartNewSuccess(
         created.id === previousId
           ? `Thesis update returned same id ${created.id.slice(0, 8)}… — unexpected.`
-          : `New active thesis created (${created.id.slice(0, 8)}…). Previous closed as history.`
+          : `New thesis #${created.id.slice(0, 8)} is now active · previous closed (research kept)`,
       );
+      setTimeout(() => setStartNewSuccess(null), 20000);
       void refetch();
     } catch (e) {
       const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
@@ -333,13 +334,29 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       <div className="flex items-center justify-between border-b border-border-base px-4 py-2.5">
         <h3 className="ui-label text-txt-secondary">
           {ticker} · Living thesis
+          {activeThesis?.id ? (
+            <span className="ml-2 font-mono text-[10px] normal-case tracking-normal text-txt-muted">
+              #{activeThesis.id.slice(0, 8)}
+            </span>
+          ) : null}
         </h3>
         <span className="font-mono text-micro tracking-wide text-txt-muted">
           {activeThesis ? 'Active' : 'No active thesis'}
+          {closedCount > 0 ? ` · ${closedCount} closed` : ''}
         </span>
       </div>
 
       <div className="space-y-4 p-4">
+        {startNewSuccess ? (
+          <div className="rounded-md border border-bull/50 bg-bull/15 px-3 py-2.5 text-sm text-bull">
+            <p className="font-semibold">{startNewSuccess}</p>
+            <p className="mt-1 text-micro text-txt-secondary">
+              Summary text can look similar because it is rebuilt from the same
+              analysis — the thesis id above is what changed.
+            </p>
+          </div>
+        ) : null}
+
         {!user && (
           <p className="flex items-center gap-2 text-sm text-txt-tertiary">
             <AlertTriangle className="h-3.5 w-3.5 text-accent" />
@@ -353,14 +370,13 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               <p className="text-sm font-semibold tracking-tight text-txt-primary">
                 {thesisCopy.headline}
               </p>
-              {createdLabel ? (
-                <p className="mt-1 text-micro text-txt-muted">
-                  Created {createdLabel}
-                  {closedCount > 0
-                    ? ` · ${closedCount} prior thesis${closedCount === 1 ? '' : 'es'} closed`
-                    : ''}
-                </p>
-              ) : null}
+              <p className="mt-1 font-mono text-micro text-txt-muted">
+                id {activeThesis.id.slice(0, 8)}…
+                {createdLabel ? ` · created ${createdLabel}` : ''}
+                {closedCount > 0
+                  ? ` · ${closedCount} prior closed (history kept)`
+                  : ''}
+              </p>
               <p className="mt-1.5 text-sm leading-relaxed text-txt-secondary">
                 {thesisCopy.body}
               </p>
@@ -489,12 +505,6 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               </Button>
             </div>
           </div>
-        )}
-
-        {startNewSuccess && (
-          <p className="rounded-md border border-bull/40 bg-bull/10 px-3 py-2 text-sm text-bull">
-            {startNewSuccess}
-          </p>
         )}
 
         {error && <p className="text-sm text-bear">{error}</p>}

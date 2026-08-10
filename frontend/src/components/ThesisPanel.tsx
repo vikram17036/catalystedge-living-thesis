@@ -246,6 +246,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
           ? Math.trunc(analysis.id)
           : undefined;
 
+      // Minimal payload — avoid ledger/snapshot shape issues blocking create.
       const created = await startNewThesis.mutateAsync({
         ticker: ticker.toUpperCase(),
         thesis_summary: summary.slice(0, 2000),
@@ -253,9 +254,6 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
         kill_criteria: ['One-day drop greater than 5%'],
         origin_analysis_id: originId,
         origin_analysis_snapshot: snapshot,
-        origin_evidence: Array.isArray(evidenceLedger)
-          ? (evidenceLedger as Record<string, unknown>[]).slice(0, 25)
-          : undefined,
         structured_kill_criteria: [
           {
             id: 'kc_day_drop',
@@ -269,27 +267,23 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
         change_reason:
           'Closed to start a new active thesis from the latest analysis',
       });
+
+      if (!created?.id) {
+        setStartNewError('Create returned empty thesis (no id).');
+        setError('Create returned empty thesis (no id).');
+        return;
+      }
+
+      // API create succeeded — trust created.id (don't false-fail on slow refetch).
       setDiffResult(null);
       setConfirmNewOpen(false);
       setStartNewError(null);
-      setError(null);
-      const refreshed = await refetch();
-      const newest = (refreshed.data?.theses || []).find((t: Thesis) =>
-        isActiveStatus(t.status)
-      );
-      if (!created?.id) {
-        setError('New thesis create returned empty response — refresh and check Theses.');
-        return;
-      }
-      if (newest?.id === previousId) {
-        setError(
-          `Close/create may have failed — still seeing thesis ${previousId.slice(0, 8)}… Refresh the page.`
-        );
-        return;
-      }
       setStartNewSuccess(
-        `New active thesis created (${created.id.slice(0, 8)}…). Previous thesis closed and kept as history.`
+        created.id === previousId
+          ? `Thesis update returned same id ${created.id.slice(0, 8)}… — unexpected.`
+          : `New active thesis created (${created.id.slice(0, 8)}…). Previous closed as history.`
       );
+      void refetch();
     } catch (e) {
       const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
       setStartNewError(msg);

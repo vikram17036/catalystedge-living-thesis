@@ -178,13 +178,25 @@ export function useStartNewThesis() {
         return s === 'active' || s === 'validated';
       });
       for (const t of actives) {
-        await client.patch(`/api/theses/${t.id}`, {
-          status: 'exited',
-          change_reason: reason,
-        });
+        try {
+          await client.patch(`/api/theses/${t.id}`, {
+            status: 'exited',
+            change_reason: reason,
+          });
+        } catch (err) {
+          const msg = thesisApiErrorMessage(err, 'Failed to close current thesis');
+          throw new Error(`Close step failed for ${t.id.slice(0, 8)}…: ${msg}`);
+        }
       }
       const { change_reason: _cr, ...createBody } = body;
-      const { data } = await client.post<Thesis>('/api/theses', createBody);
+      let data: Thesis;
+      try {
+        const res = await client.post<Thesis>('/api/theses', createBody);
+        data = res.data;
+      } catch (err) {
+        const msg = thesisApiErrorMessage(err, 'Failed to create replacement thesis');
+        throw new Error(`Create step failed (old thesis already closed if close succeeded): ${msg}`);
+      }
       if (!data?.id) {
         throw new Error('Create returned empty thesis');
       }

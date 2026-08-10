@@ -13,7 +13,6 @@ import {
   useThesisComparison,
   useReplayThesis,
   useProposeThesisFromAnalysis,
-  useStartNewThesis,
   thesisApiErrorMessage,
 } from '../api/theses';
 import ThesisDiffView from './ThesisDiffView';
@@ -105,14 +104,14 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
 
   const comparison = useThesisComparison(activeThesis?.id ?? null);
   const createThesis = useCreateThesis();
-  const startNewThesis = useStartNewThesis();
   const propose = useProposeThesisFromAnalysis();
   const replay = useReplayThesis();
   const [editorOpen, setEditorOpen] = useState(false);
-  const [confirmNewOpen, setConfirmNewOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'start-new'>(
+    'edit'
+  );
   const [diffResult, setDiffResult] = useState<ThesisComparison | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [startNewError, setStartNewError] = useState<string | null>(null);
   const [startNewSuccess, setStartNewSuccess] = useState<string | null>(null);
 
   const snapshot = useMemo(() => buildSnapshot(analysis), [analysis]);
@@ -220,78 +219,40 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
     }
   };
 
-  const handleStartNewThesis = async () => {
-    setStartNewError(null);
+  const startNewDraft = useMemo(() => {
+    const conf = analysis.overall_confidence ?? 0;
+    const sentiment = analysis.overall_sentiment || 'Unknown';
+    const summary =
+      (analysis.summary || '').trim().length >= 10
+        ? analysis.summary!.trim()
+        : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
+    return {
+      thesis_summary: summary.slice(0, 2000),
+      conviction_level: (conf >= 0.75
+        ? 'high'
+        : conf >= 0.45
+          ? 'medium'
+          : 'low') as 'low' | 'medium' | 'high',
+      kill_criteria: ['One-day drop greater than 5%'],
+    };
+  }, [analysis, ticker]);
+
+  const openStartNewEditor = () => {
     setStartNewSuccess(null);
     setError(null);
-    if (!user) {
-      setStartNewError('Sign in to start a new thesis');
-      return;
-    }
-    if (!activeThesis) {
-      setStartNewError('No active thesis to close');
-      return;
-    }
-    const previousId = activeThesis.id;
-    try {
-      const sentiment = analysis.overall_sentiment || 'Unknown';
-      const conf = analysis.overall_confidence ?? 0;
-      const summary =
-        (analysis.summary || '').trim().length >= 10
-          ? analysis.summary!.trim()
-          : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
-
-      const originId =
-        typeof analysis.id === 'number' && Number.isFinite(analysis.id)
-          ? Math.trunc(analysis.id)
-          : undefined;
-
-      // Minimal payload — avoid ledger/snapshot shape issues blocking create.
-      const created = await startNewThesis.mutateAsync({
-        ticker: ticker.toUpperCase(),
-        thesis_summary: summary.slice(0, 2000),
-        conviction_level: conf >= 0.75 ? 'high' : conf >= 0.45 ? 'medium' : 'low',
-        kill_criteria: ['One-day drop greater than 5%'],
-        origin_analysis_id: originId,
-        origin_analysis_snapshot: snapshot,
-        structured_kill_criteria: [
-          {
-            id: 'kc_day_drop',
-            kind: 'deterministic',
-            label: 'One-day drop greater than 5%',
-            metric: 'one_day_return',
-            op: 'lte',
-            threshold: -0.05,
-          },
-        ],
-        change_reason:
-          'Closed to start a new active thesis from the latest analysis',
-      });
-
-      if (!created?.id) {
-        setStartNewError('Create returned empty thesis (no id).');
-        setError('Create returned empty thesis (no id).');
-        return;
-      }
-
-      // API create succeeded — trust created.id (don't false-fail on slow refetch).
-      setDiffResult(null);
-      setConfirmNewOpen(false);
-      setStartNewError(null);
-      setStartNewSuccess(
-        created.id === previousId
-          ? `Thesis update returned same id ${created.id.slice(0, 8)}… — unexpected.`
-          : `New thesis #${created.id.slice(0, 8)} is now active · previous closed (research kept)`,
-      );
-      setTimeout(() => setStartNewSuccess(null), 20000);
-      void refetch();
-    } catch (e) {
-      const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
-      setStartNewError(msg);
-      setError(msg);
-    }
+    setEditorMode('start-new');
+    setEditorOpen(true);
   };
 
+  const openEditEditor = () => {
+    setEditorMode('edit');
+    setEditorOpen(true);
+  };
+
+  const openCreateEditor = () => {
+    setEditorMode('create');
+    setEditorOpen(true);
+  };
 
   const handleReplay = async () => {
     if (!activeThesis) return;
@@ -320,8 +281,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
     }
   };
 
-  const pending =
-    propose.isPending || createThesis.isPending || startNewThesis.isPending;
+  const pending = propose.isPending || createThesis.isPending;
   const research = attachedEvidence.filter(
     (e) => String(e.type || '').toLowerCase() !== 'scenario'
   );
@@ -401,7 +361,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setEditorOpen(true)}
+                onClick={openEditEditor}
                 disabled={pending}
                 className="h-8"
               >
@@ -411,7 +371,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setConfirmNewOpen(true)}
+                onClick={openStartNewEditor}
                 disabled={!user || pending}
                 className="h-8"
               >
@@ -496,7 +456,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setEditorOpen(true)}
+                onClick={openCreateEditor}
                 disabled={!user}
                 className="h-8 gap-2"
               >
@@ -510,65 +470,35 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
         {error && <p className="text-sm text-bear">{error}</p>}
       </div>
 
-      {confirmNewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-md border border-border-base bg-surface-1 p-5 shadow-xl">
-            <h4 className="text-sm font-semibold text-txt-primary">
-              Start a new {ticker} thesis?
-            </h4>
-            <p className="mt-2 text-sm leading-relaxed text-txt-secondary">
-              {ticker} already has an active thesis. Starting a new one will{' '}
-              <span className="text-txt-primary">close</span> the current
-              thesis (history, attachments, and origin evidence stay preserved)
-              and create a new <span className="text-txt-primary">active</span>{' '}
-              thesis from the latest analysis.
-            </p>
-            {startNewError ? (
-              <div className="mt-3 rounded-md border border-bear/40 bg-bear/10 px-3 py-2 text-sm text-bear">
-                {startNewError}
-              </div>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={startNewThesis.isPending}
-                onClick={() => {
-                  setConfirmNewOpen(false);
-                  setStartNewError(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={startNewThesis.isPending}
-                onClick={() => void handleStartNewThesis()}
-                className="gap-2"
-              >
-                {startNewThesis.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : null}
-                Close current & create new
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <ThesisEditor
         isOpen={editorOpen}
+        mode={editorMode}
         onClose={() => {
           setEditorOpen(false);
-          refetch();
+          void refetch();
         }}
         ticker={ticker}
-        existingThesis={activeThesis}
+        existingThesis={editorMode === 'edit' ? activeThesis : null}
         analysisSnapshot={snapshot}
         originEvidence={evidenceLedger as Record<string, unknown>[] | undefined}
-        originAnalysisId={analysis.id}
+        originAnalysisId={
+          typeof analysis.id === 'number' ? analysis.id : undefined
+        }
+        draftDefaults={
+          editorMode === 'start-new' || editorMode === 'create'
+            ? startNewDraft
+            : null
+        }
+        onSuccess={(created) => {
+          setDiffResult(null);
+          if (editorMode === 'start-new' && created?.id) {
+            setStartNewSuccess(
+              `New thesis #${created.id.slice(0, 8)} is now active · previous closed (research kept)`
+            );
+            setTimeout(() => setStartNewSuccess(null), 20000);
+          }
+          void refetch();
+        }}
       />
     </div>
   );

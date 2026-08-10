@@ -186,41 +186,55 @@ def create_thesis(user_id: str, access_token: str, thesis_data: Dict[str, Any]) 
     try:
         client = get_supabase_client()
         client.postgrest.auth(access_token)
-        
+
         data = {
             "user_id": user_id,
             "ticker": thesis_data["ticker"].upper(),
             "position_id": thesis_data.get("position_id"),
             "thesis_summary": thesis_data["thesis_summary"],
             "conviction_level": thesis_data.get("conviction_level", "medium"),
-            "kill_criteria": thesis_data.get("kill_criteria", []),
+            "kill_criteria": thesis_data.get("kill_criteria") or [],
             "time_horizon": thesis_data.get("time_horizon", "medium"),
             "thesis_type": thesis_data.get("thesis_type", "growth"),
             "status": "active",
         }
-        
+
         # Stage 4 / Phase 1: Analysis-Thesis Linkage + evidence freeze
-        if thesis_data.get("origin_analysis_id"):
+        if thesis_data.get("origin_analysis_id") is not None:
             data["origin_analysis_id"] = thesis_data["origin_analysis_id"]
         if thesis_data.get("origin_analysis_snapshot"):
             data["origin_analysis_snapshot"] = thesis_data["origin_analysis_snapshot"]
         if thesis_data.get("origin_evidence") is not None:
-            data["origin_evidence"] = thesis_data["origin_evidence"]
+            # Cap oversized ledgers so create never dies on payload size
+            evidence = thesis_data["origin_evidence"]
+            try:
+                import json as _json
+
+                raw = _json.dumps(evidence, default=str)
+                if len(raw) > 350_000:
+                    logger.warning(
+                        "origin_evidence too large (%s bytes); storing empty freeze",
+                        len(raw),
+                    )
+                    evidence = []
+            except Exception:
+                evidence = []
+            data["origin_evidence"] = evidence
         if thesis_data.get("structured_kill_criteria") is not None:
             data["structured_kill_criteria"] = thesis_data["structured_kill_criteria"]
-        
+
         response = client.table("theses").insert(data).execute()
         thesis = response.data[0] if response.data else None
-        
+
         # Create history entry. Pinecone indexing is scheduled by the API
         # route (BackgroundTasks) so CRUD never blocks on embed/network.
         if thesis:
             _create_thesis_history(user_id, access_token, thesis["id"], thesis, "created")
-        
+
         return thesis
     except Exception as e:
         logger.error(f"Thesis create error: {e}")
-        return None
+        raise
 
 
 
@@ -275,7 +289,7 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
         return thesis
     except Exception as e:
         logger.error(f"Thesis update error: {e}")
-        return None
+        raise
 
 
 def _create_thesis_history(

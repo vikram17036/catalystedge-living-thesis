@@ -4,7 +4,7 @@ Authentication and user data API routes.
 Stage 3: User Belief System
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from pydantic import BaseModel, Field
 
@@ -112,20 +112,45 @@ class ThesisResponse(BaseModel):
     ticker: str
     thesis_summary: str
     conviction_level: str
-    kill_criteria: List[str]
-    time_horizon: str
-    thesis_type: str
-    status: str
+    kill_criteria: List[str] = Field(default_factory=list)
+    time_horizon: str = "medium"
+    thesis_type: str = "growth"
+    status: str = "active"
     origin_analysis_id: Optional[int] = None
     origin_analysis_snapshot: Optional[dict] = None
     origin_evidence: Optional[List[dict]] = None
     structured_kill_criteria: Optional[List[dict]] = None
     attached_evidence: Optional[List[dict]] = None
-    created_at: str
-    updated_at: str
+    created_at: str = ""
+    updated_at: str = ""
 
     class Config:
         extra = "ignore"
+
+
+def _as_thesis_response(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize Supabase row so response_model never 500s after a successful write."""
+    kills = row.get("kill_criteria")
+    if not isinstance(kills, list):
+        kills = []
+    kills = [str(k) if not isinstance(k, str) else k for k in kills]
+    return {
+        "id": str(row.get("id") or ""),
+        "ticker": str(row.get("ticker") or ""),
+        "thesis_summary": str(row.get("thesis_summary") or ""),
+        "conviction_level": str(row.get("conviction_level") or "medium"),
+        "kill_criteria": kills,
+        "time_horizon": str(row.get("time_horizon") or "medium"),
+        "thesis_type": str(row.get("thesis_type") or "growth"),
+        "status": str(row.get("status") or "active"),
+        "origin_analysis_id": row.get("origin_analysis_id"),
+        "origin_analysis_snapshot": row.get("origin_analysis_snapshot"),
+        "origin_evidence": row.get("origin_evidence"),
+        "structured_kill_criteria": row.get("structured_kill_criteria"),
+        "attached_evidence": row.get("attached_evidence") or [],
+        "created_at": str(row.get("created_at") or ""),
+        "updated_at": str(row.get("updated_at") or ""),
+    }
 
 
 # ============================================
@@ -236,13 +261,17 @@ async def add_thesis(
     user=Depends(get_current_user),
 ):
     """Create a new investment thesis with kill criteria."""
-    result = create_thesis(user["id"], user["access_token"], thesis.model_dump())
+    try:
+        result = create_thesis(user["id"], user["access_token"], thesis.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to create thesis: {e}") from e
 
     if not result:
         raise HTTPException(status_code=400, detail="Failed to create thesis")
 
     _schedule_thesis_index(background_tasks, user["id"], result)
-    return enrich_thesis_with_attachments(user["id"], user["access_token"], result)
+    enriched = enrich_thesis_with_attachments(user["id"], user["access_token"], result)
+    return _as_thesis_response(enriched)
 
 
 class StartNewThesisRequest(ThesisCreate):
@@ -269,23 +298,34 @@ async def start_new_thesis(
     for t in existing:
         status = (t.get("status") or "active").lower()
         if status in ("active", "validated"):
-            closed = update_thesis(
-                user["id"],
-                user["access_token"],
-                str(t["id"]),
-                {"status": "exited", "change_reason": reason},
-            )
+            try:
+                closed = update_thesis(
+                    user["id"],
+                    user["access_token"],
+                    str(t["id"]),
+                    {"status": "exited", "change_reason": reason},
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to close current thesis: {e}"
+                ) from e
             if closed:
                 _schedule_thesis_index(background_tasks, user["id"], closed)
 
     create_payload = body.model_dump(exclude={"change_reason"})
     create_payload["ticker"] = ticker
-    result = create_thesis(user["id"], user["access_token"], create_payload)
+    try:
+        result = create_thesis(user["id"], user["access_token"], create_payload)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to create replacement thesis: {e}"
+        ) from e
     if not result:
         raise HTTPException(status_code=400, detail="Failed to create replacement thesis")
 
     _schedule_thesis_index(background_tasks, user["id"], result)
-    return enrich_thesis_with_attachments(user["id"], user["access_token"], result)
+    enriched = enrich_thesis_with_attachments(user["id"], user["access_token"], result)
+    return _as_thesis_response(enriched)
 
 
 class FromAnalysisRequest(BaseModel):
@@ -429,14 +469,17 @@ async def modify_thesis(
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
 
-    result = update_thesis(user["id"], user["access_token"], thesis_id, update_data)
+    try:
+        result = update_thesis(user["id"], user["access_token"], thesis_id, update_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update thesis: {e}") from e
 
     if not result:
         raise HTTPException(status_code=404, detail="Thesis not found")
 
     # Refresh semantic memory after content OR status changes (best-effort, async)
     _schedule_thesis_index(background_tasks, user["id"], result)
-    return result
+    return _as_thesis_response(result)
 
 
 @router.get("/theses/{thesis_id}/history")

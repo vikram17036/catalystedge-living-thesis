@@ -222,7 +222,14 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   const handleStartNewThesis = async () => {
     setStartNewError(null);
     setError(null);
-    if (!user || !activeThesis) return;
+    if (!user) {
+      setStartNewError('Sign in to start a new thesis');
+      return;
+    }
+    if (!activeThesis) {
+      setStartNewError('No active thesis to close');
+      return;
+    }
     try {
       const sentiment = analysis.overall_sentiment || 'Unknown';
       const conf = analysis.overall_confidence ?? 0;
@@ -231,14 +238,16 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
           ? analysis.summary!.trim()
           : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
 
-      await startNewThesis.mutateAsync({
+      const created = await startNewThesis.mutateAsync({
         ticker: ticker.toUpperCase(),
         thesis_summary: summary.slice(0, 2000),
         conviction_level: conf >= 0.75 ? 'high' : conf >= 0.45 ? 'medium' : 'low',
         kill_criteria: ['One-day drop greater than 5%'],
         origin_analysis_id: analysis.id,
         origin_analysis_snapshot: snapshot,
-        origin_evidence: evidenceLedger as Record<string, unknown>[] | undefined,
+        origin_evidence: Array.isArray(evidenceLedger)
+          ? (evidenceLedger as Record<string, unknown>[]).slice(0, 25)
+          : undefined,
         structured_kill_criteria: [
           {
             id: 'kc_day_drop',
@@ -255,7 +264,11 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       setDiffResult(null);
       setConfirmNewOpen(false);
       setStartNewError(null);
+      setError(null);
       await refetch();
+      if (!created?.id) {
+        setError('New thesis create returned empty response — refresh and check Theses.');
+      }
     } catch (e) {
       const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
       setStartNewError(msg);
@@ -480,7 +493,9 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               thesis from the latest analysis.
             </p>
             {startNewError ? (
-              <p className="mt-3 text-sm text-bear">{startNewError}</p>
+              <div className="mt-3 rounded-md border border-bear/40 bg-bear/10 px-3 py-2 text-sm text-bear">
+                {startNewError}
+              </div>
             ) : null}
             <div className="mt-4 flex justify-end gap-2">
               <Button

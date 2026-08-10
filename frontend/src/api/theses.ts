@@ -122,6 +122,7 @@ export function useCreateThesis() {
 
 /**
  * Close active theses for ticker and create a replacement in one request.
+ * Falls back to PATCH exit + POST create if /start-new is unavailable.
  * Pinecone indexing is deferred on the server.
  */
 export function useStartNewThesis() {
@@ -132,10 +133,58 @@ export function useStartNewThesis() {
       thesis: CreateThesisRequest & { change_reason?: string }
     ) => {
       const client = await createThesisClient();
-      const { data } = await client.post<Thesis>('/api/theses/start-new', thesis);
-      return data;
+      // Keep payload light — large ledgers have caused silent create failures.
+      const slimEvidence = Array.isArray(thesis.origin_evidence)
+        ? thesis.origin_evidence.slice(0, 40)
+        : undefined;
+      const body = {
+        ...thesis,
+        origin_evidence: slimEvidence,
+      };
+      try {
+        const { data } = await client.post<Thesis>('/api/theses/start-new', body);
+        return data;
+      } catch (err) {
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        // Fallback for older backends or transient routing issues
+        if (status && status !== 404 && status !== 405 && status !== 502 && status !== 503) {
+          throw err;
+        }
+        const list = await client.get<ThesesResponse>('/api/theses', {
+          params: { ticker: body.ticker.toUpperCase() },
+        });
+        const actives = (list.data.theses || []).filter((t) => {
+          const s = (t.status || 'active').toLowerCase();
+          return s === 'active' || s === 'validated';
+        });
+        for (const t of actives) {
+          await client.patch(`/api/theses/${t.id}`, {
+            status: 'exited',
+            change_reason:
+              body.change_reason ||
+              'Closed to start a new active thesis from the latest analysis',
+          });
+        }
+        const { change_reason: _cr, ...createBody } = body;
+        const { data } = await client.post<Thesis>('/api/theses', createBody);
+        return data;
+      }
     },
     onSuccess: (data) => {
+      queryClient.setQueryData(thesisKeys.byTicker(data.ticker), (prev: ThesesResponse | undefined) => {
+        const prior = prev?.theses ?? [];
+        const exited = prior.map((t) =>
+          t.id !== data.id &&
+          ((t.status || 'active') === 'active' || t.status === 'validated')
+            ? { ...t, status: 'exited' as const }
+            : t
+        );
+        const withoutDup = exited.filter((t) => t.id !== data.id);
+        return {
+          theses: [data, ...withoutDup],
+          count: withoutDup.length + 1,
+        };
+      });
       queryClient.invalidateQueries({ queryKey: thesisKeys.all });
       queryClient.invalidateQueries({ queryKey: thesisKeys.byTicker(data.ticker) });
     },

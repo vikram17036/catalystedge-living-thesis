@@ -74,13 +74,11 @@ export default function PriceMovementHero({
     <section className="overflow-hidden rounded-sm border border-border-base bg-surface-1">
       <div className="grid gap-0 lg:grid-cols-[1.35fr_1fr]">
         <div className="border-b border-border-base p-5 lg:border-b-0 lg:border-r">
-          <p className="font-mono text-micro font-bold uppercase tracking-widest text-accent">
-            PRICE_MOVEMENT
-          </p>
+          <p className="ui-label text-accent">Price movement</p>
 
           <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
-            <div>
-              <h2 className="font-mono text-2xl font-bold text-txt-primary">
+            <div className="min-w-0 max-w-full flex-1">
+              <h2 className="truncate font-mono text-xl font-bold leading-tight text-txt-primary sm:text-2xl">
                 {companyName}
               </h2>
               <p className="mt-1 font-mono text-sm uppercase tracking-widest text-txt-muted">
@@ -114,27 +112,21 @@ export default function PriceMovementHero({
 
         <div className="grid grid-cols-2 gap-px bg-border-base">
           <div className="bg-canvas p-4">
-            <p className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-              PREVIOUS_CLOSE
-            </p>
+            <p className="ui-label">Previous close</p>
             <p className="mt-2 font-mono text-lg font-bold text-txt-primary">
               {formatCurrency(previous.Close)}
             </p>
           </div>
 
           <div className="bg-canvas p-4">
-            <p className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-              SESSION_DATE
-            </p>
+            <p className="ui-label">Session date</p>
             <p className="mt-2 font-mono text-sm font-bold text-txt-primary">
               {new Date(latest.Date).toLocaleDateString()}
             </p>
           </div>
 
           <div className="col-span-2 bg-canvas p-4">
-            <p className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-              SIGNAL_CONTEXT
-            </p>
+            <p className="ui-label">Signal context</p>
             <p className="mt-2 font-mono text-sm font-bold text-txt-primary">
               {result.overall_sentiment || 'Analysis pending'} ·{' '}
               {Math.round((result.overall_confidence ?? 0) * 100)}% confidence

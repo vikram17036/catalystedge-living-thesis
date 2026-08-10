@@ -50,8 +50,8 @@ export default function LabPage() {
       const n = res.thesis?.attached_evidence?.length ?? 0;
       setAttachMsg(
         res.already_attached
-          ? `Already attached (${n} on thesis). Open dashboard LIVING_THESIS.`
-          : `Attached (${n} on thesis — origin unchanged). Open dashboard LIVING_THESIS.`
+          ? `Already attached (${n} on thesis). Open the living thesis on the dashboard.`
+          : `Attached (${n} on thesis — origin unchanged). Open the living thesis on the dashboard.`
       );
       await queryClient.invalidateQueries({ queryKey: thesisKeys.all });
       await queryClient.invalidateQueries({
@@ -139,10 +139,7 @@ export default function LabPage() {
             <button
               key={chip}
               type="button"
-              onClick={() => {
-                setQuestion(chip);
-                void submit(chip);
-              }}
+              onClick={() => setQuestion(chip)}
               className="rounded-sm border border-border-base bg-surface-2 px-2.5 py-1 font-mono text-micro text-txt-secondary hover:border-accent hover:text-accent"
             >
               {chip}
@@ -171,16 +168,13 @@ export default function LabPage() {
                   {spec.ticker} · SMA CROSSOVER
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-micro uppercase text-txt-muted">
-                    {result.reproducibility.engine_version} · mode={response.mode}
-                  </span>
                   <button
                     type="button"
                     onClick={() => void attachToThesis()}
                     disabled={attaching}
-                    className="rounded-sm border border-accent bg-accent/10 px-2.5 py-1 font-mono text-micro font-bold uppercase tracking-widest text-accent disabled:opacity-40"
+                    className="rounded-md border border-accent bg-accent/10 px-2.5 py-1 text-micro font-semibold tracking-wide text-accent disabled:opacity-40"
                   >
-                    {attaching ? '…' : 'ATTACH_TO_THESIS'}
+                    {attaching ? '…' : 'Attach to thesis'}
                   </button>
                 </div>
               </div>
@@ -215,20 +209,20 @@ export default function LabPage() {
               <div className="font-mono text-micro uppercase text-txt-muted mb-3">Result</div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <div className="text-micro text-txt-muted">NET RETURN</div>
+                  <div className="text-micro text-txt-muted">Net return</div>
                   <div className="font-mono text-lg">{pct(m.total_return)}</div>
                 </div>
                 <div>
-                  <div className="text-micro text-txt-muted">MAX DRAWDOWN</div>
-                  <div className="font-mono text-lg">{pct(m.max_drawdown)}</div>
+                  <div className="text-micro text-kill/80">Max drawdown</div>
+                  <div className="font-mono text-lg text-kill">{pct(m.max_drawdown)}</div>
                 </div>
                 <div>
-                  <div className="text-micro text-txt-muted">HIT RATE</div>
+                  <div className="text-micro text-txt-muted">Hit rate</div>
                   <div className="font-mono text-lg">{pct(m.hit_rate)}</div>
                 </div>
                 <div>
-                  <div className="text-micro text-txt-muted">GROSS → NET</div>
-                  <div className="font-mono text-sm mt-1">
+                  <div className="text-micro text-txt-muted">Gross → net</div>
+                  <div className="mt-1 font-mono text-sm">
                     {pct(m.gross_return)} → {pct(m.total_return)}
                   </div>
                 </div>
@@ -246,10 +240,13 @@ export default function LabPage() {
                 className="w-full px-5 py-3 text-left font-mono text-micro font-bold uppercase tracking-widest text-txt-secondary hover:text-accent"
                 onClick={() => setShowWhy((v) => !v)}
               >
-                Why / Costs / Spec Diff
+                Why / costs / reproducibility
               </button>
               {showWhy && (
                 <div className="border-t border-border-base px-5 py-3 space-y-3 font-mono text-micro text-txt-secondary">
+                  <div>
+                    {result.reproducibility.engine_version} · mode={response.mode}
+                  </div>
                   <div>
                     Gross {pct(m.gross_return)} − commission impact {pct(m.commission_impact)} −
                     slippage impact {pct(m.slippage_impact)} = net {pct(m.total_return)}

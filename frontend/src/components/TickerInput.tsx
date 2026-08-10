@@ -162,7 +162,7 @@ const TickerInput = forwardRef<TickerInputRef, TickerInputProps>(
 
             <Input
               ref={inputRef}
-              placeholder="SEARCH_COMPANY_OR_TICKER"
+              placeholder="Search company or ticker"
               value={query}
               onChange={(event) => handleChange(event.target.value)}
               onKeyDown={handleKeyDown}
@@ -230,19 +230,25 @@ const TickerInput = forwardRef<TickerInputRef, TickerInputProps>(
           <Button
             type="submit"
             disabled={disabled || !resolvedTicker}
-            className="h-12 min-w-[160px] rounded-sm border border-transparent bg-accent font-mono text-micro font-bold uppercase tracking-widest text-canvas transition-colors hover:bg-accent/90 disabled:border-border-base disabled:bg-surface-2 disabled:text-txt-muted disabled:opacity-50"
+            aria-disabled={disabled || !resolvedTicker}
+            className={cn(
+              'h-12 min-w-[168px] rounded-md border font-mono text-micro font-semibold uppercase tracking-wider transition-colors',
+              disabled || !resolvedTicker
+                ? 'cursor-not-allowed border-border-base bg-transparent text-txt-muted opacity-45 shadow-none hover:bg-transparent'
+                : 'cursor-pointer border-transparent bg-accent text-canvas hover:bg-accent/90'
+            )}
           >
-            WHY IS IT MOVING?
+            Why is it moving?
           </Button>
         </form>
 
         {showError && (
           <div
             id="ticker-error"
-            className="mt-2 flex items-center gap-2 font-mono text-micro uppercase tracking-widest text-bear"
+            className="mt-2 flex items-center gap-2 text-micro text-bear"
           >
             <AlertCircle className="h-3 w-3" />
-            <span>SELECT A COMPANY OR ENTER A VALID TICKER</span>
+            <span>Select a company or enter a valid ticker</span>
           </div>
         )}
       </div>

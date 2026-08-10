@@ -241,3 +241,7 @@ zstandard==0.24.0
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 supabase>=2.0.0
+
+# Phase 7/8 semantic memory + embeddings (pinned to local verified versions)
+pinecone==9.1.0
+google-genai==2.17.0

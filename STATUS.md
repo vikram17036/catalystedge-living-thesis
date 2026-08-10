@@ -4,7 +4,6 @@
 **Repo:** https://github.com/vikram17036/catalystedge-living-thesis  
 **Local:** UI `localhost:3002` (or 3000) → API `127.0.0.1:8002`  
 **Prod:** https://catalystedge-living-thesis-pearl.vercel.app · https://catalystedge-backend.onrender.com  
-*(Phase 2–4 code on GitHub; full prod redeploy deferred)*
 
 **Rule:** Keep **done** and **next** in this document only. Do not spawn separate phase plan files.
 
@@ -18,68 +17,52 @@
 4. No `exec()` of LLM Python.  
 5. **`origin_evidence` is frozen at thesis create** — later research never rewrites it.
 
-**Progression:** P1 belief → P2 historical test → P3 safe rule sim → P4 attach research without rewriting origin
+**Architecture:** LangGraph orchestrates · RAG remembers · deterministic engines calculate · evidence validates
+
+**Progression:** P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8 · **stop adding product phases**
+
+**Three memories:**
+1. **Working** — LangGraph `InMemorySaver` + `user_id:thread_id` (process-local; lost on restart)
+2. **Structured** — Supabase (authoritative)
+3. **Semantic** — Pinecone refs → Supabase hydrate (auth via ContextVar, never checkpointed)
 
 ---
 
 # DONE SO FAR
 
-## Phase 1 — Living Thesis — FROZEN (prod smoke)
+## Phase 1–7 — as before (P7 agent + Pinecone VERIFIED locally)
 
-Analyze → thesis → origin freeze → replay → Diff/Why → kill → alerts.
+## Phase 8 — Eval, Observability, Deploy-ready — IMPLEMENTED locally
 
-## Phase 2 — Event Study — FROZEN locally
-
-RESEARCH: NVDA FOMC → hikes → ±5d. Pure engine + `fomc_v1`.
-
-## Phase 3 — Strategy Lab — locally verified
-
-LAB: 20/50 SMA NVDA → costs → show DD/hit rate (no spec mutation).
-
-## Phase 4 — Attach Experiments — IMPLEMENTED
-
-**Storage:** `thesis_evidence` table (`006_thesis_evidence.sql`) — **not** `origin_evidence`.
-
-**API:** `POST /api/theses/attach-by-ticker`, `POST /api/theses/{id}/attach-evidence`
-
-**UI:** ATTACH_TO_THESIS on RESEARCH + LAB; ATTACHED_EXPERIMENTS on ThesisPanel; WHY = ORIGIN | ATTACHED | CURRENT (Diff math still origin vs current only).
-
-**Required in Supabase SQL editor:** `006_thesis_evidence.sql`, then **`007_thesis_evidence_grants.sql`** (grants/RLS — without this, attach can look successful but nothing persists).
-
-### Hero demo
-
-```text
-Create NVDA thesis → origin frozen
-RESEARCH → ATTACH_TO_THESIS
-LAB → ATTACH_TO_THESIS
-ThesisPanel → ATTACHED_EXPERIMENTS
-Replay → Diff still uses original baseline; WHY shows three sections
-```
+- `research_trace_v1` execution receipt (tool split, engine_repro, sanitized errors, timings)
+- User-namespaced checkpoint threads; JWT not in graph state
+- Eval corpus + scorecard: `tests/test_research_agent_eval.py`
+- `/health` cheap (no network); `/api/ready` TTL-cached deps (Pinecone optional degrade)
+- `X-Request-Id` + latency logging
+- AGENT UI = research plan receipt + reindex counts
+- Deploy unblock: `pinecone==9.1.0`, `google-genai==2.17.0` in `requirements-backend.txt`; `PINECONE_*` in `render.yaml`; `DEPLOY.md` P8 smoke
 
 ### Regression
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_thesis_attach.py tests/test_thesis_loop.py tests/test_event_study.py tests/test_strategy_lab.py tests/test_contracts.py -q
+.\scripts\regression.ps1
 ```
+
+### Prod ship (manual once)
+
+1. Push + Render Redeploy  
+2. Set `PINECONE_API_KEY`, `PINECONE_INDEX`, `CORS_ORIGINS` on Render  
+3. Smoke: login → thesis → labs → AGENT hero → −12% → `/api/ready`
 
 ---
 
 # NEXT
 
-**Deploy status (2026-08-09):**
-- Pushed `2b6b2ae` to `main` (Phase 4 attach fixes + `007` grants).
-- **Vercel frontend:** Production deploy for `2b6b2ae` succeeded → https://catalystedge-living-thesis-pearl.vercel.app
-- **Render backend:** still serving Phase‑1 OpenAPI (no `/attach-by-ticker`, research, lab). **Manual Redeploy** required in Render for `catalystedge-backend` (auto-deploy may be off / stale).
-- **Prod Supabase:** run `006_thesis_evidence.sql` + `007_thesis_evidence_grants.sql` in the **production** project SQL editor (if not already).
+**No P9 product phase.** Maintain / demo polish / interview narrative / keep prod walkthrough reliable.
 
-Then Phase 5+ only when intentional:
+**UI:** Shell + content presentation frozen for demo (2026-08-09). Do not redesign; only fix breakages.
 
-| Phase | Theme |
-|-------|--------|
-| 5 | Historical Analog Search |
-| 6 | Scenario Lab + Thesis Dependency Graph |
-| 7 | Research Memory + Postmortems |
-| 8 | Deep eval + observability |
+**Prod ship:** Push → Render Manual Redeploy → confirm `/api/research-agent-ping` + `/api/ready` → Vercel auto (frontend).
 
 ---
 
@@ -90,14 +73,15 @@ cd C:\Users\vikra\projects\catalystedge-ai-catalystedge-mvp
 .\.venv\Scripts\uvicorn.exe stocksense.main:app --host 127.0.0.1 --port 8002
 cd frontend
 npm run dev
+.\scripts\regression.ps1
 ```
 
 ---
 
 ## Change log
 
-1. P1–P3 as above.  
-2. Phase 4: `thesis_evidence` + attach APIs + UI; origin/Diff untouched.  
-3. Phase 4 fix: fail hard on empty insert, grants migration `007`, cache invalidate, always show ATTACHED_EXPERIMENTS count.  
+1. P1–P7 as above.  
+2. Phase 8: measure agent, expose receipt, harden health/deps, pin deploy deps.  
+3. Demo UI polish: grey hierarchy, human evidence cards, Agent loading, chip fill-only.  
 
 *Maintain only this file for what’s done / what’s next.*

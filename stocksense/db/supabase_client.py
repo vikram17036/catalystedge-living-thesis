@@ -215,6 +215,12 @@ def create_thesis(user_id: str, access_token: str, thesis_data: Dict[str, Any]) 
         # Create history entry
         if thesis:
             _create_thesis_history(user_id, access_token, thesis["id"], thesis, "created")
+            try:
+                from stocksense.memory.indexer import index_thesis
+
+                index_thesis(user_id, thesis)
+            except Exception as idx_err:
+                logger.warning(f"thesis memory index skipped: {idx_err}")
         
         return thesis
     except Exception as e:
@@ -251,6 +257,12 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
                 user_id, access_token, thesis_id, thesis, 
                 change_type, updates.get("change_reason")
             )
+            try:
+                from stocksense.memory.indexer import index_thesis
+
+                index_thesis(user_id, thesis)
+            except Exception as idx_err:
+                logger.warning(f"thesis memory index skipped: {idx_err}")
         
         return thesis
     except Exception as e:
@@ -399,6 +411,12 @@ def attach_thesis_evidence(
         )
 
     row = inserted.data[0]
+    try:
+        from stocksense.memory.indexer import index_evidence_row
+
+        index_evidence_row(user_id, row, ticker=str(thesis.get("ticker") or ""))
+    except Exception as idx_err:
+        logger.warning(f"evidence memory index skipped: {idx_err}")
     return {
         "attached": True,
         "already_attached": False,
@@ -433,3 +451,104 @@ def enrich_thesis_with_attachments(
     out["attached_evidence"] = [r.get("evidence") for r in rows if r.get("evidence")]
     out["attached_evidence_rows"] = rows
     return out
+
+
+class ThesisDependencyError(ValueError):
+    pass
+
+
+def _owned_thesis(
+    user_id: str, access_token: str, thesis_id: str
+) -> Optional[Dict[str, Any]]:
+    client = _authed_supabase(access_token)
+    resp = (
+        client.table("theses")
+        .select("id,ticker,thesis_summary,status,user_id")
+        .eq("id", thesis_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def create_thesis_dependency(
+    user_id: str,
+    access_token: str,
+    *,
+    from_thesis_id: str,
+    to_thesis_id: str,
+    link_type: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    allowed = {"depends_on", "related_ticker", "shared_kill_metric"}
+    if link_type not in allowed:
+        raise ThesisDependencyError(f"link_type must be one of {sorted(allowed)}")
+    if from_thesis_id == to_thesis_id:
+        raise ThesisDependencyError("Cannot link a thesis to itself")
+    src = _owned_thesis(user_id, access_token, from_thesis_id)
+    dst = _owned_thesis(user_id, access_token, to_thesis_id)
+    if not src or not dst:
+        raise ThesisDependencyError("Both theses must exist and belong to you")
+
+    client = _authed_supabase(access_token)
+    row = {
+        "user_id": user_id,
+        "from_thesis_id": from_thesis_id,
+        "to_thesis_id": to_thesis_id,
+        "link_type": link_type,
+        "meta": meta or {},
+    }
+    inserted = client.table("thesis_dependencies").insert(row).execute()
+    if not inserted.data:
+        raise ThesisDependencyError(
+            "Dependency insert returned no row — check RLS/grants on thesis_dependencies"
+        )
+    return inserted.data[0]
+
+
+def delete_thesis_dependency(
+    user_id: str, access_token: str, dependency_id: str
+) -> bool:
+    client = _authed_supabase(access_token)
+    resp = (
+        client.table("thesis_dependencies")
+        .delete()
+        .eq("id", dependency_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(resp.data)
+
+
+def get_thesis_graph(
+    user_id: str, access_token: str, ticker: Optional[str] = None
+) -> Dict[str, Any]:
+    theses = get_user_theses(user_id, access_token, ticker)
+    ids = {str(t["id"]) for t in theses}
+    client = _authed_supabase(access_token)
+    edges_resp = (
+        client.table("thesis_dependencies")
+        .select("*")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    edges = []
+    for e in edges_resp.data or []:
+        if str(e["from_thesis_id"]) in ids or str(e["to_thesis_id"]) in ids:
+            if ticker:
+                # keep edge if either endpoint is in filtered thesis set
+                if str(e["from_thesis_id"]) in ids and str(e["to_thesis_id"]) in ids:
+                    edges.append(e)
+            else:
+                edges.append(e)
+    nodes = [
+        {
+            "id": t["id"],
+            "ticker": t.get("ticker"),
+            "thesis_summary": (t.get("thesis_summary") or "")[:160],
+            "status": t.get("status"),
+        }
+        for t in theses
+    ]
+    return {"nodes": nodes, "edges": edges, "count_nodes": len(nodes), "count_edges": len(edges)}

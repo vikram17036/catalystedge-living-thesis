@@ -27,10 +27,10 @@ export default function UserMenu({ onOpenAuth }: UserMenuProps) {
     return (
       <button
         onClick={onOpenAuth}
-        className="flex items-center gap-2 px-3 py-1.5 text-micro font-mono tracking-widest uppercase text-accent border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors rounded-sm"
+        className="flex cursor-pointer items-center gap-2 rounded-md border border-border-base bg-surface-1 px-3 py-1.5 font-mono text-micro tracking-wide text-txt-secondary transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-txt-primary"
       >
-        <User className="h-3 w-3" />
-        AUTH_SYS
+        <User className="h-3.5 w-3.5" />
+        Sign in
       </button>
     );
   }
@@ -80,13 +80,13 @@ export default function UserMenu({ onOpenAuth }: UserMenuProps) {
             </div>
 
             <div className="py-1">
-              <button className="flex items-center gap-3 w-full px-3 py-2 text-micro font-mono uppercase tracking-widest text-txt-secondary hover:text-txt-primary hover:bg-surface-2 transition-colors">
+              <button className="flex w-full items-center gap-3 px-3 py-2 text-micro text-txt-secondary transition-colors hover:bg-surface-2 hover:text-txt-primary">
                 <BookOpen className="h-3 w-3 text-txt-muted" />
-                MY_THESES
+                My theses
               </button>
-              <button className="flex items-center gap-3 w-full px-3 py-2 text-micro font-mono uppercase tracking-widest text-txt-secondary hover:text-txt-primary hover:bg-surface-2 transition-colors">
+              <button className="flex w-full items-center gap-3 px-3 py-2 text-micro text-txt-secondary transition-colors hover:bg-surface-2 hover:text-txt-primary">
                 <Settings className="h-3 w-3 text-txt-muted" />
-                SYS_CONFIG
+                Settings
               </button>
             </div>
 
@@ -96,10 +96,10 @@ export default function UserMenu({ onOpenAuth }: UserMenuProps) {
                   signOut();
                   setIsOpen(false);
                 }}
-                className="flex items-center gap-3 w-full px-3 py-2 text-micro font-mono uppercase tracking-widest text-kill hover:bg-kill/10 transition-colors"
+                className="flex w-full items-center gap-3 px-3 py-2 text-micro text-kill transition-colors hover:bg-kill/10"
               >
                 <LogOut className="h-3 w-3" />
-                TERM_SESSION
+                Sign out
               </button>
             </div>
           </div>

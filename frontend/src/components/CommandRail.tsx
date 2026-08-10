@@ -9,11 +9,25 @@ import {
   ChevronRight,
   FlaskConical,
   LineChart,
+  GitCompare,
+  AlertTriangle,
+  Network,
+  Bot,
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { cn } from '../utils/cn';
 
-type ViewType = 'dashboard' | 'history' | 'research' | 'lab' | 'theses' | 'alerts';
+type ViewType =
+  | 'dashboard'
+  | 'history'
+  | 'research'
+  | 'lab'
+  | 'analogs'
+  | 'scenarios'
+  | 'agent'
+  | 'graph'
+  | 'theses'
+  | 'alerts';
 
 interface CommandRailProps {
   currentView: ViewType;
@@ -21,15 +35,19 @@ interface CommandRailProps {
 }
 
 const primaryItems = [
-  { icon: LayoutDashboard, label: 'ANALYSIS', viewId: 'dashboard' as ViewType },
-  { icon: History, label: 'HISTORY', viewId: 'history' as ViewType },
-  { icon: FlaskConical, label: 'RESEARCH', viewId: 'research' as ViewType },
-  { icon: LineChart, label: 'LAB', viewId: 'lab' as ViewType },
+  { icon: LayoutDashboard, label: 'Analysis', viewId: 'dashboard' as ViewType },
+  { icon: History, label: 'History', viewId: 'history' as ViewType },
+  { icon: FlaskConical, label: 'Research', viewId: 'research' as ViewType },
+  { icon: LineChart, label: 'Strategy Lab', viewId: 'lab' as ViewType },
+  { icon: GitCompare, label: 'Analogs', viewId: 'analogs' as ViewType },
+  { icon: AlertTriangle, label: 'Scenarios', viewId: 'scenarios' as ViewType },
+  { icon: Bot, label: 'Agent', viewId: 'agent' as ViewType },
 ];
 
 const advancedItems = [
-  { icon: BookOpen, label: 'THESES', viewId: 'theses' as ViewType },
-  { icon: Bell, label: 'SYS_ALERTS', viewId: 'alerts' as ViewType },
+  { icon: BookOpen, label: 'Theses', viewId: 'theses' as ViewType },
+  { icon: Network, label: 'Graph', viewId: 'graph' as ViewType },
+  { icon: Bell, label: 'Alerts', viewId: 'alerts' as ViewType },
 ];
 
 export default function CommandRail({
@@ -47,21 +65,25 @@ export default function CommandRail({
     return (
       <button
         key={item.label}
+        type="button"
         onClick={() => {
           onNavigate(item.viewId);
           setAdvancedOpen(false);
         }}
         className={cn(
-          'group relative flex h-12 w-full items-center justify-center border-l-[3px] transition-colors outline-none',
+          'group relative flex h-11 w-full cursor-pointer items-center justify-center border-l-2 transition-colors outline-none',
           isActive
-            ? 'border-accent bg-surface-2 text-accent'
-            : 'border-transparent text-txt-muted hover:border-border-strong hover:bg-surface-2 hover:text-txt-primary'
+            ? 'border-accent bg-surface-3 text-accent'
+            : 'border-transparent text-txt-muted hover:bg-surface-3/80 hover:text-txt-secondary'
         )}
         aria-label={item.label}
+        title={item.label}
       >
-        <item.icon className="h-4 w-4 shrink-0" />
-
-        <div className="absolute left-14 z-50 hidden whitespace-nowrap rounded-sm border border-border-base bg-surface-1 px-3 py-1.5 font-mono text-micro font-bold uppercase tracking-widest text-txt-primary group-hover:flex">
+        <item.icon className="h-4 w-4 shrink-0" strokeWidth={isActive ? 2 : 1.5} />
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-16 z-50 whitespace-nowrap rounded-md border border-border-base bg-surface-2 px-3 py-2 text-sm font-medium tracking-tight text-txt-primary opacity-0 shadow-lg transition-opacity delay-200 duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        >
           {item.label}
         </div>
       </button>
@@ -71,85 +93,81 @@ export default function CommandRail({
   return (
     <>
       <aside className="fixed left-0 top-0 z-40 flex h-screen w-14 flex-col items-center border-r border-border-base bg-surface-1">
-        <div className="relative flex h-14 w-full items-center justify-center border-b border-border-base bg-surface-2/30 text-txt-primary">
-          <Box className="h-5 w-5" />
-          <div className="absolute bottom-0 h-px w-full bg-accent/20" />
+        <div className="relative flex h-14 w-full items-center justify-center border-b border-border-base text-txt-tertiary">
+          <Box className="h-4 w-4" strokeWidth={1.75} />
         </div>
 
-        <nav className="mt-4 flex w-full flex-1 flex-col items-center gap-1">
+        <nav className="mt-2 flex w-full flex-1 flex-col items-center">
           {primaryItems.map(renderNavigationButton)}
 
           <button
+            type="button"
             onClick={() => setAdvancedOpen((open) => !open)}
             className={cn(
-              'group relative flex h-12 w-full items-center justify-center border-l-[3px] transition-colors outline-none',
+              'group relative mt-1 flex h-11 w-full cursor-pointer items-center justify-center border-l-2 transition-colors outline-none',
               advancedOpen ||
                 currentView === 'theses' ||
+                currentView === 'graph' ||
                 currentView === 'alerts'
-                ? 'border-accent bg-surface-2 text-accent'
-                : 'border-transparent text-txt-muted hover:border-border-strong hover:bg-surface-2 hover:text-txt-primary'
+                ? 'border-accent bg-surface-3 text-accent'
+                : 'border-transparent text-txt-muted hover:bg-surface-3/80 hover:text-txt-secondary'
             )}
-            aria-label="ADVANCED"
+            aria-label="More"
             aria-expanded={advancedOpen}
+            title="More"
           >
             <ChevronRight
               className={cn(
                 'h-4 w-4 transition-transform',
-                advancedOpen && 'rotate-180'
+                advancedOpen && 'rotate-90'
               )}
             />
-
-            <div className="absolute left-14 z-50 hidden whitespace-nowrap rounded-sm border border-border-base bg-surface-1 px-3 py-1.5 font-mono text-micro font-bold uppercase tracking-widest text-txt-primary group-hover:flex">
-              ADVANCED
+            <div
+              role="tooltip"
+              className="pointer-events-none absolute left-16 z-50 whitespace-nowrap rounded-md border border-border-base bg-surface-2 px-3 py-2 text-sm font-medium tracking-tight text-txt-primary opacity-0 shadow-lg transition-opacity delay-200 duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            >
+              More
             </div>
           </button>
         </nav>
 
-        <div className="mt-auto flex h-14 w-full items-center justify-center border-t border-border-base bg-surface-2/10 font-mono text-micro font-bold uppercase tracking-widest text-txt-muted">
-          ADV
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowAuthModal(true)}
+          className="mb-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-txt-muted transition-colors hover:bg-surface-2 hover:text-txt-secondary"
+          title="Account"
+        >
+          <User className="h-4 w-4" strokeWidth={1.5} />
+        </button>
       </aside>
 
       {advancedOpen && (
         <>
           <button
             type="button"
-            aria-label="Close advanced menu"
-            className="fixed inset-0 z-30 cursor-default"
+            aria-label="Close menu"
+            className="fixed inset-0 z-30 cursor-default bg-black/20"
             onClick={() => setAdvancedOpen(false)}
           />
 
-          <div className="fixed left-14 top-[164px] z-50 w-52 rounded-sm border border-border-base bg-surface-1 p-2 shadow-xl">
-            <div className="mb-2 border-b border-border-base px-2 pb-2 font-mono text-micro font-bold uppercase tracking-widest text-txt-muted">
-              ADVANCED_TOOLS
-            </div>
-
-            <button
-              onClick={() => {
-                setShowAuthModal(true);
-                setAdvancedOpen(false);
-              }}
-              className="flex w-full items-center gap-3 rounded-sm px-3 py-2 font-mono text-micro font-bold uppercase tracking-widest text-txt-secondary transition-colors hover:bg-surface-2 hover:text-txt-primary"
-            >
-              <User className="h-4 w-4 text-accent" />
-              AUTH_SYS
-            </button>
-
+          <div className="fixed left-14 top-16 z-50 w-48 rounded-md border border-border-base bg-surface-2 p-1.5 shadow-xl">
+            <p className="ui-label px-2.5 py-2">Workspace</p>
             {advancedItems.map((item) => (
               <button
                 key={item.label}
+                type="button"
                 onClick={() => {
                   onNavigate(item.viewId);
                   setAdvancedOpen(false);
                 }}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-sm px-3 py-2 font-mono text-micro font-bold uppercase tracking-widest transition-colors hover:bg-surface-2',
+                  'flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 font-mono text-micro tracking-wide transition-colors',
                   currentView === item.viewId
-                    ? 'bg-surface-2 text-accent'
-                    : 'text-txt-secondary hover:text-txt-primary'
+                    ? 'bg-surface-3 text-accent'
+                    : 'text-txt-secondary hover:bg-surface-3 hover:text-txt-primary'
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-3.5 w-3.5" strokeWidth={1.5} />
                 {item.label}
               </button>
             ))}

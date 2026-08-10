@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Set
 
-ALLOWED_ATTACH_TYPES: Set[str] = {"event_study", "backtest"}
+ALLOWED_ATTACH_TYPES: Set[str] = {
+    "event_study",
+    "backtest",
+    "analog_search",
+    "scenario",
+}
 
 
 class AttachError(ValueError):

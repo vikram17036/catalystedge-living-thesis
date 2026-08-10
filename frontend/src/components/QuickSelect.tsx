@@ -4,6 +4,7 @@ import { cn } from '../utils/cn';
 interface QuickSelectProps {
   onSelect: (ticker: string) => void;
   disabled?: boolean;
+  activeTicker?: string | null;
 }
 
 const popularTickers = [
@@ -14,29 +15,40 @@ const popularTickers = [
   { symbol: 'GOOGL', name: 'Google' },
 ];
 
-const QuickSelect = ({ onSelect, disabled = false }: QuickSelectProps) => {
+const QuickSelect = ({
+  onSelect,
+  disabled = false,
+  activeTicker = null,
+}: QuickSelectProps) => {
+  const active = (activeTicker || '').toUpperCase();
+
   return (
-    <div className="flex h-12 w-full items-center gap-2 overflow-x-auto px-4 no-scrollbar border border-border-base rounded-sm bg-surface-1">
-      <div className="flex items-center gap-2 border-r border-border-base/50 pr-4 mr-2">
-          <div className="w-1 h-3 bg-accent" />
-          <span className="text-micro font-mono text-txt-muted uppercase tracking-widest shrink-0">
-            QUICK_ACCESS
-          </span>
-      </div>
-      <div className="flex gap-2">
-        {popularTickers.map(({ symbol }) => (
-          <Button
-            key={symbol}
-            variant="ghost"
-            onClick={() => onSelect(symbol)}
-            disabled={disabled}
-            className={cn(
-              "h-7 px-3 py-1 font-mono text-micro tracking-widest text-txt-secondary hover:text-txt-primary hover:bg-surface-2 border border-transparent hover:border-border-strong transition-colors shrink-0 rounded-sm uppercase"
-            )}
-          >
-            {symbol}
-          </Button>
-        ))}
+    <div className="flex min-h-12 w-full flex-wrap items-center gap-x-2 gap-y-1.5 rounded-md border border-border-base bg-surface-1 px-3 py-2">
+      <span className="ui-label shrink-0">Quick</span>
+      <div className="flex flex-wrap items-center gap-1">
+        {popularTickers.map(({ symbol, name }) => {
+          const isActive = active === symbol;
+          return (
+            <Button
+              key={symbol}
+              variant="ghost"
+              size="sm"
+              title={name}
+              onClick={() => onSelect(symbol)}
+              disabled={disabled}
+              aria-pressed={isActive}
+              className={cn(
+                'h-8 shrink-0 rounded-md border px-2.5 font-mono text-micro uppercase tracking-wider transition-colors',
+                isActive
+                  ? 'border-accent/50 bg-accent/10 text-accent'
+                  : 'border-transparent text-txt-tertiary hover:border-border-strong hover:bg-surface-2 hover:text-txt-primary',
+                disabled && 'opacity-40'
+              )}
+            >
+              {symbol}
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

@@ -8,81 +8,75 @@ This backend uses **Google Gemini**, not OpenAI.
 |----------|--------|--------|
 | `GOOGLE_API_KEY` | root `.env` | https://aistudio.google.com/app/apikey |
 | `NEWSAPI_KEY` | root `.env` | https://newsapi.org/register |
-| `SUPABASE_URL` | root `.env` + `frontend/.env` | Your project URL |
-| `SUPABASE_ANON_KEY` | root `.env` + `frontend/.env` as `VITE_SUPABASE_ANON_KEY` | Public anon key |
+| `SUPABASE_URL` | root `.env` + `frontend/.env.local` | Your project URL |
+| `SUPABASE_ANON_KEY` | root `.env` + `frontend/.env.local` as `VITE_SUPABASE_ANON_KEY` | Public anon key |
 | `SUPABASE_SERVICE_KEY` | root `.env` only | Service role — never commit / never put in Vite |
-| `VITE_API_URL` | `frontend/.env` | Production: your Render backend URL |
+| `PINECONE_API_KEY` | root `.env` + Render | https://app.pinecone.io |
+| `PINECONE_INDEX` | root `.env` + Render | Custom dense index: **768 dims, cosine** |
+| `VITE_API_URL` | `frontend/.env.local` | Local `http://127.0.0.1:8002`; prod = Render URL |
 
-Optional: Fashion uses `OPENAI_API_KEY`. CatalystEdge does **not** read it today.
+Pinned backend extras (Render installs `requirements-backend.txt`): `pinecone==9.1.0`, `google-genai==2.17.0`.
 
 ### Local setup
 
 ```powershell
 cd C:\Users\vikra\projects\catalystedge-ai-catalystedge-mvp
 copy .env.example .env
-# edit .env with YOUR keys
+# edit .env with YOUR keys (incl. PINECONE_*)
 
 cd frontend
-copy ..\.env.example .env.local
-# keep only VITE_* lines in frontend/.env.local and set VITE_API_URL=http://127.0.0.1:8000
+# VITE_* in frontend/.env.local ; VITE_API_URL=http://127.0.0.1:8002
 ```
 
-In Supabase SQL editor (your project), run migrations in order under `supabase/`, including:
-
-`supabase/migrations/005_living_thesis.sql`
+In Supabase SQL editor, run migrations `001`–`010` (or `bootstrap_new_project.sql` for greenfield).
 
 ### Deploy architecture
 
 | Piece | Host | Why |
 |-------|------|-----|
 | React frontend | **Vercel** | Static Vite build |
-| FastAPI + scheduler | **Render** (see `render.yaml`) | Long-running API + Watchman job; not a fit for Vercel serverless as-is |
+| FastAPI + scheduler | **Render** (see `render.yaml`) | Long-running API; not Vercel serverless |
 
 ### Backend → Render
 
-**One-click Blueprint** (after repo is on GitHub):
-
-https://dashboard.render.com/blueprint/new?repo=https%3A%2F%2Fgithub.com%2Fvikram17036%2Fcatalystedge-living-thesis
-
-1. Connect the `vikram17036/catalystedge-living-thesis` repo (or open the link above).
-2. Service name should be `catalystedge-backend` from `render.yaml`.
-3. Set secrets (same as root `.env`):
+1. Connect `vikram17036/catalystedge-living-thesis` (Blueprint or existing `catalystedge-backend`).
+2. Set secrets:
    - `GOOGLE_API_KEY`, `NEWSAPI_KEY`
-   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (Legacy JWT), `SUPABASE_SERVICE_KEY`
-   - `CORS_ORIGINS` — leave `*` until Vercel URL exists, then set to the Vercel origin
-4. Deploy → copy the public URL (e.g. `https://catalystedge-backend.onrender.com`).
+   - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`
+   - `PINECONE_API_KEY`, `PINECONE_INDEX`
+   - `CORS_ORIGINS` = Vercel origin (not `*` in prod)
+3. **Manual Redeploy** after push (avoid stale OpenAPI).
+4. Confirm `GET /api/research-agent-ping` and `GET /api/ready` on the Render URL.
 
-Free-tier note: no persistent disk in `render.yaml` (ephemeral `/tmp` cache only). Cold starts are OK for smoke; do not rewrite the app to chase free-tier quirks.
+**Note:** LangGraph conversation memory (`InMemorySaver`) is process-local — cold starts reset threads. Durable research remains in Supabase/Pinecone.
 
 ### Frontend → Vercel
 
-1. Vercel → New Project → import `vikram17036/catalystedge-living-thesis`.
-2. **Root Directory** = `frontend` (required).
-3. Env vars:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY` (same Legacy JWT anon key)
-   - `VITE_API_URL` = Render backend URL from above (**no trailing slash**)
-4. Deploy.
+1. Root Directory = `frontend`.
+2. Env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` = Render URL (no trailing slash).
+3. Redeploy after backend URL/env changes.
 
-### Supabase Auth (required for live login)
+### Supabase Auth
 
-In your Supabase project → Authentication → URL configuration:
+Site URL + Redirect URLs must include the Vercel origin and `http://localhost:3002/**` (or your local port).
 
-- **Site URL** = your Vercel URL
-- **Redirect URLs** include `https://<vercel-app>.vercel.app/**` and `http://localhost:3000/**`
+### Smoke check after deploy (P1–P8)
 
-Without this, production login fails even if the API is healthy.
-### Smoke check after deploy (exact Phase 1 regression)
-
-Fresh browser session on **public** URLs only:
+Fresh browser on **public** URLs:
 
 ```text
-login → analyze NVDA → create thesis → replay adverse fixture
-     → Thesis Diff → WHY evidence → kill banner → alerts center
+login → analyze NVDA → create thesis → attach research
+     → analogs → scenario WHAT-IF
+     → AGENT hero → Follow-up −12% (writes=0)
+     → GET /health (cheap flags) → GET /api/ready (deps; pinecone optional degrade)
 ```
 
-If that passes, deployment is done and Phase 1 is frozen. Do not refactor the thesis engine to “fix” hosting issues — keep the local demo intact.
+### Regression (local)
+
+```powershell
+.\scripts\regression.ps1
+```
 
 ### Rule
 
-Deploy is distribution. If Render/Vercel config is painful, stop and leave local Phase 1 alone rather than rewriting working code.
+Deploy is distribution. After Phase 8, stop adding product phases — polish demo, narrative, and keep the prod walkthrough boringly reliable.

@@ -14,6 +14,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ThesesPage from './pages/ThesesPage';
 import ResearchPage from './pages/ResearchPage';
 import LabPage from './pages/LabPage';
+import AnalogsPage from './pages/AnalogsPage';
+import ScenarioPage from './pages/ScenarioPage';
+import AgentPage from './pages/AgentPage';
+import ThesisGraphPage from './pages/ThesisGraphPage';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, useToast } from './components/ui/toast';
 import { useAppKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -23,11 +27,10 @@ import { fetchKillAlerts, updateKillAlertStatus } from './api/alerts';
 import { useAuth } from './context/AuthContext';
 import type { AnalysisData, KillAlert } from './types/api';
 import { AlertCircle } from 'lucide-react';
-import { cn } from './utils/cn';
 
 function AppContent() {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'history' | 'research' | 'lab' | 'theses' | 'alerts'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'history' | 'research' | 'lab' | 'analogs' | 'scenarios' | 'agent' | 'graph' | 'theses' | 'alerts'>('dashboard');
   const { addToast } = useToast();
   const { user } = useAuth();
   const tickerInputRef = useRef<TickerInputRef>(null);
@@ -43,7 +46,7 @@ function AppContent() {
     ? 'online' 
     : isHealthError 
       ? 'offline' 
-      : 'checking...';
+      : 'unknown';
   
   // Streaming Analysis (Stage 4)
   const streaming = useStreamingAnalysis();
@@ -149,24 +152,24 @@ function AppContent() {
   if (currentView === 'history') {
     return (
       <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
         <CommandRail onNavigate={setCurrentView} currentView={currentView} />
         <main className="flex flex-1 flex-col ml-14 relative z-10">
-          <Header />
+          <Header backendStatus={backendStatus} />
           <div className="p-4 md:p-6 lg:p-8">
             <div className="mb-6">
-              <p className="font-mono text-micro font-bold uppercase tracking-widest text-accent">
-                ANALYSIS_HISTORY
-              </p>
-              <h1 className="mt-2 font-mono text-2xl font-bold tracking-tight text-txt-primary">
-                Recent Market Research
+              <p className="ui-label text-accent">History</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-txt-primary">
+                Recent market research
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-txt-secondary">
                 Open a previously cached analysis without running the AI workflow again.
               </p>
             </div>
             <div className="max-w-3xl">
-              <AnalysisHistory onSelectHistory={handleSelectHistory} />
+              <AnalysisHistory
+                variant="page"
+                onSelectHistory={handleSelectHistory}
+              />
             </div>
           </div>
         </main>
@@ -178,10 +181,9 @@ function AppContent() {
   if (currentView === 'research') {
     return (
       <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
         <CommandRail onNavigate={setCurrentView} currentView={currentView} />
         <main className="flex flex-1 flex-col ml-14 relative z-10">
-          <Header />
+          <Header backendStatus={backendStatus} />
           <ResearchPage />
         </main>
       </div>
@@ -192,11 +194,59 @@ function AppContent() {
   if (currentView === 'lab') {
     return (
       <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
         <CommandRail onNavigate={setCurrentView} currentView={currentView} />
         <main className="flex flex-1 flex-col ml-14 relative z-10">
-          <Header />
+          <Header backendStatus={backendStatus} />
           <LabPage />
+        </main>
+      </div>
+    );
+  }
+
+  // Render Historical Analog Search view
+  if (currentView === 'analogs') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header backendStatus={backendStatus} />
+          <AnalogsPage />
+        </main>
+      </div>
+    );
+  }
+
+  if (currentView === 'scenarios') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header backendStatus={backendStatus} />
+          <ScenarioPage />
+        </main>
+      </div>
+    );
+  }
+
+  if (currentView === 'agent') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header backendStatus={backendStatus} />
+          <AgentPage />
+        </main>
+      </div>
+    );
+  }
+
+  if (currentView === 'graph') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header backendStatus={backendStatus} />
+          <ThesisGraphPage />
         </main>
       </div>
     );
@@ -206,10 +256,9 @@ function AppContent() {
   if (currentView === 'theses') {
     return (
       <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
         <CommandRail onNavigate={setCurrentView} currentView={currentView} />
         <main className="flex flex-1 flex-col ml-14 relative z-10">
-          <Header />
+          <Header backendStatus={backendStatus} />
           <ThesesPage onBack={() => setCurrentView('dashboard')} />
         </main>
       </div>
@@ -220,10 +269,9 @@ function AppContent() {
   if (currentView === 'alerts') {
     return (
       <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
         <CommandRail onNavigate={setCurrentView} currentView={currentView} />
         <main className="flex flex-1 flex-col ml-14 p-6 relative z-10">
-          <Header />
+          <Header backendStatus={backendStatus} />
           <div className="flex-1 mt-6">
              <AlertsCenter />
           </div>
@@ -234,14 +282,13 @@ function AppContent() {
 
   return (
     <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
       {/* 48px Command Rail (Sidebar Replacement) */}
       <CommandRail onNavigate={setCurrentView} currentView={currentView} />
 
       {/* Main Content Area */}
       <main className="flex flex-1 flex-col ml-14 relative z-10">
         {/* Top Bar */}
-        <Header />
+        <Header backendStatus={backendStatus} />
 
         {/* Dashboard Content Padded Area */}
         <div className="p-4 md:p-6 lg:p-8">
@@ -252,7 +299,11 @@ function AppContent() {
               <TickerInput ref={tickerInputRef} onAnalyze={handleAnalyze} disabled={isLoading} />
             </div>
             <div className="lg:col-span-4">
-               <QuickSelect onSelect={handleAnalyze} disabled={isLoading} />
+               <QuickSelect
+                 onSelect={handleAnalyze}
+                 disabled={isLoading}
+                 activeTicker={selectedTicker}
+               />
             </div>
           </div>
 
@@ -268,7 +319,7 @@ function AppContent() {
               >
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
-                  <span className="font-mono text-sm uppercase tracking-widest font-bold">ANALYSIS_FAILED</span>
+                  <span className="text-sm font-semibold tracking-wide">Analysis failed</span>
                 </div>
                 <p className="mt-2 text-micro font-mono tracking-wider">{error}</p>
               </motion.div>
@@ -342,7 +393,11 @@ function AppContent() {
               >
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
                   <div className="lg:col-span-8">
-                     <EmptyState type="welcome" />
+                     <EmptyState
+                       type="welcome"
+                       onNavigate={(view) => setCurrentView(view)}
+                       onFocusSearch={() => tickerInputRef.current?.focus()}
+                     />
                   </div>
                   <div className="lg:col-span-4">
                      <AnalysisHistory onSelectHistory={handleSelectHistory} />
@@ -353,22 +408,6 @@ function AppContent() {
           </AnimatePresence>
         </div>
       </main>
-
-      {/* Status Indicator (Fixed Bottom Right) */}
-      <div className="fixed bottom-4 right-4 z-50 md:bottom-6 md:right-6 mix-blend-difference opacity-80 hover:opacity-100 transition-opacity">
-        <div className={cn(
-          "flex items-center gap-2 rounded-sm px-3 py-1.5 text-micro uppercase font-mono tracking-widest border bg-canvas/80 backdrop-blur-sm",
-          backendStatus === 'online' 
-            ? 'text-bull border-bull/30' 
-            : 'text-bear border-bear/30'
-        )}>
-           <div className={cn(
-             "h-1.5 w-1.5 rounded-sm",
-             backendStatus === 'online' ? 'bg-bull' : 'bg-bear animate-pulse'
-           )} />
-           {backendStatus === 'online' ? 'SYS_ONLINE' : 'SYS_OFFLINE'}
-        </div>
-      </div>
     </div>
   );
 }

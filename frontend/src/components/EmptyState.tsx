@@ -1,143 +1,121 @@
-import { 
-  LineChart, 
-  Search, 
-  Newspaper,
-  Sparkles,
-  TrendingUp,
-  Brain,
-  Clock,
-  Command,
-  Briefcase
-} from 'lucide-react';
+import { Search, Command } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../utils/cn';
 
 interface EmptyStateProps {
   type: 'welcome' | 'no-chart' | 'no-news' | 'no-history' | 'no-data';
   onAction?: () => void;
+  onNavigate?: (view: 'dashboard' | 'research' | 'scenarios' | 'agent') => void;
+  onFocusSearch?: () => void;
 }
 
 const emptyStateConfig = {
   welcome: {
-    icon: Sparkles,
-    title: 'CATALYSTEDGE_AI',
-    description: 'AWAITING TICKER INPUT TO INITIALIZE INTELLIGENCE ROUTINES.',
-    actionLabel: null,
-    showFeatures: true,
+    title: 'CatalystEdge',
+    description:
+      'Enter a ticker to run living-thesis research — analysis, kill criteria, and evidence.',
+    actionLabel: null as string | null,
   },
   'no-chart': {
-    icon: LineChart,
-    title: 'NO DATA STREAM',
-    description: 'PRICE DATA IS CURRENTLY UNAVAILABLE FOR THIS ASSET.',
-    actionLabel: 'RETRY CONNECTION',
-    showFeatures: false,
+    title: 'No price data',
+    description: 'Price data is unavailable for this asset right now.',
+    actionLabel: 'Retry',
   },
   'no-news': {
-    icon: Newspaper,
-    title: 'NO SIGNAL DETECTED',
-    description: 'NO RECENT SIGNIFICANT PUBLICATIONS FOUND FOR THIS TICKER.',
+    title: 'No recent coverage',
+    description: 'No significant publications found for this ticker.',
     actionLabel: null,
-    showFeatures: false,
   },
   'no-history': {
-    icon: Search,
-    title: 'CACHE EMPTY',
-    description: "NO PRIOR SCANS FOUND IN LOCAL STORAGE. AWAITING INPUT.",
+    title: 'No recent analyses',
+    description: 'Run a scan to populate your local cache.',
     actionLabel: null,
-    showFeatures: false,
   },
   'no-data': {
-    icon: Briefcase,
-    title: 'FUNDAMENTALS MISSING',
-    description: 'CORE FINANCIAL DATA IS NOT AVAILABLE FOR THIS TICKER.',
+    title: 'Fundamentals unavailable',
+    description: 'Core financial data is not available for this ticker.',
     actionLabel: null,
-    showFeatures: false,
   },
 };
 
-const features = [
-  {
-    icon: Brain,
-    title: 'AI_SYNTHESIS',
-  },
-  {
-    icon: TrendingUp,
-    title: 'PRICE_ACTION',
-  },
-  {
-    icon: Clock,
-    title: 'REAL_TIME_FEED',
-  },
+const CAPS: {
+  label: string;
+  view: 'dashboard' | 'research' | 'scenarios' | 'agent';
+}[] = [
+  { label: 'Analysis', view: 'dashboard' },
+  { label: 'Event study', view: 'research' },
+  { label: 'Scenarios', view: 'scenarios' },
+  { label: 'Agent', view: 'agent' },
 ];
 
-// Detect if user is on Mac for keyboard shortcut display
-const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const isMac =
+  typeof navigator !== 'undefined' &&
+  navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
-const EmptyState = ({ type, onAction }: EmptyStateProps) => {
+const EmptyState = ({ type, onAction, onNavigate, onFocusSearch }: EmptyStateProps) => {
   const config = emptyStateConfig[type];
-  const Icon = config.icon;
+
+  const handleCap = (view: (typeof CAPS)[number]['view']) => {
+    if (view === 'dashboard') {
+      onFocusSearch?.();
+      return;
+    }
+    onNavigate?.(view);
+  };
 
   return (
-    <div className={cn(
-      "flex h-full min-h-[400px] flex-col items-center justify-center p-8 text-center border bg-surface-1 rounded-sm relative overflow-hidden",
-      type === 'welcome' ? "border-border-base" : "border-dashed border-border-strong opacity-80 bg-surface-1/50"
-    )}>
-      
-      {/* Background terminal grid effect overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-20"></div>
-
-      <div className="relative z-10 flex flex-col items-center max-w-lg">
-        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-sm bg-accent/5 border border-accent/20">
-          <Icon className="h-5 w-5 text-accent animate-pulse" />
+    <div
+      className={cn(
+        'ui-panel relative flex min-h-[380px] flex-col items-center justify-center p-10 text-center',
+        type !== 'welcome' && 'border-dashed opacity-90'
+      )}
+    >
+      <div className="relative z-10 flex max-w-md flex-col items-center">
+        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-md border border-border-base bg-surface-2 text-txt-tertiary">
+          <Search className="h-4 w-4" strokeWidth={1.75} />
         </div>
-        
-        <h3 className="mb-2 text-micro font-mono font-bold tracking-widest text-txt-primary uppercase">
+
+        <h3 className="mb-2 font-mono text-sm font-semibold tracking-wide text-txt-primary">
           {config.title}
         </h3>
-        
-        <p className="max-w-[360px] font-mono text-micro uppercase tracking-widest leading-relaxed text-txt-muted mb-8">
+
+        <p className="mb-6 max-w-sm text-sm leading-relaxed text-txt-secondary">
           {config.description}
         </p>
 
-        {/* Features Grid for Welcome State */}
-        {config.showFeatures && (
-          <div className="flex flex-wrap gap-2 mb-8 w-full justify-center">
-            {features.map((feature) => {
-              const FeatureIcon = feature.icon;
-              return (
-                <div key={feature.title} className="flex items-center gap-2 px-3 py-1.5 border border-border-base bg-surface-2 rounded-sm transition-colors hover:border-border-strong">
-                  <FeatureIcon className="h-3 w-3 text-txt-muted" />
-                  <span className="text-micro font-mono uppercase tracking-widest text-txt-secondary">{feature.title}</span>
-                </div>
-              );
-            })}
+        {type === 'welcome' && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {CAPS.map((cap) => (
+              <button
+                key={cap.label}
+                type="button"
+                onClick={() => handleCap(cap.view)}
+                className="cursor-pointer rounded-md border border-border-base bg-surface-2 px-2.5 py-1.5 font-mono text-micro tracking-wide text-txt-secondary transition-colors hover:border-accent/50 hover:bg-surface-3 hover:text-txt-primary"
+              >
+                {cap.label}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Keyboard Shortcut Hint for Welcome State */}
         {type === 'welcome' && (
-          <div className="flex items-center gap-2 text-micro text-txt-muted font-mono tracking-widest opacity-80 mt-auto pt-8">
-            <span>PRESS</span>
-            <span className="inline-flex items-center gap-1 border border-border-strong bg-surface-2 px-1.5 py-0.5 rounded-sm">
+          <p className="mt-8 flex items-center gap-2 font-mono text-micro tracking-wider text-txt-muted">
+            <span>Press</span>
+            <kbd className="inline-flex items-center gap-1 rounded border border-border-base bg-surface-2 px-1.5 py-0.5 text-txt-tertiary">
               {isMac ? (
                 <>
-                  <Command className="h-3 w-3" />
-                  <span>K</span>
+                  <Command className="h-3 w-3" />K
                 </>
               ) : (
-                <span>CTRL+K</span>
+                'Ctrl+K'
               )}
-            </span>
-            <span>TO INITIATE SCAN</span>
-          </div>
+            </kbd>
+            <span>to focus search</span>
+          </p>
         )}
 
         {config.actionLabel && onAction && (
-          <Button 
-            variant="ghost" 
-            className="mt-6 font-mono text-micro tracking-widest uppercase border border-border-strong text-txt-secondary hover:text-txt-primary hover:bg-surface-2 hover:border-txt-muted rounded-sm h-8"
-            onClick={onAction}
-          >
+          <Button variant="outline" className="mt-6" onClick={onAction}>
             {config.actionLabel}
           </Button>
         )}

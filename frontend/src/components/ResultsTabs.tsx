@@ -18,9 +18,9 @@ interface ResultsTabsProps {
 }
 
 const tabs = [
-  { id: 'thesis', label: 'CATALYST_SUMMARY', icon: FileText },
-  { id: 'skeptic', label: 'RISK_SIGNALS', icon: ShieldAlert },
-  { id: 'fundamentals', label: 'FUNDAMENTAL_DATA', icon: BarChart3 },
+  { id: 'thesis', label: 'Catalyst summary', icon: FileText },
+  { id: 'skeptic', label: 'Risk signals', icon: ShieldAlert },
+  { id: 'fundamentals', label: 'Fundamentals', icon: BarChart3 },
 ];
 
 const ResultsTabs = ({ result, onRefresh, isRefreshing, onAlertCreated }: ResultsTabsProps) => {
@@ -48,13 +48,14 @@ const ResultsTabs = ({ result, onRefresh, isRefreshing, onAlertCreated }: Result
             <h2 className="text-4xl font-mono font-bold tracking-tight text-txt-primary">{result.ticker}</h2>
             <div className="flex items-center gap-2 border border-accent/30 bg-accent/5 px-2 py-1 rounded-sm">
               <span className="h-1.5 w-1.5 bg-accent rounded-sm animate-pulse" />
-              <span className="text-micro font-mono font-medium uppercase tracking-widest text-accent">
-                {result.agent_type}_ANALYSIS
+              <span className="text-micro font-mono font-medium tracking-wide text-accent">
+                {result.agent_type || 'Market'} analysis
               </span>
             </div>
           </div>
-          <p className="text-sm font-mono text-txt-muted uppercase tracking-widest">
-            LAST_UPDATED: {new Date(result.timestamp).toLocaleDateString()} // {new Date(result.timestamp).toLocaleTimeString()}
+          <p className="text-sm font-mono text-txt-muted tracking-wide">
+            Updated {new Date(result.timestamp).toLocaleDateString()} ·{' '}
+            {new Date(result.timestamp).toLocaleTimeString()}
           </p>
         </div>
         <Button
@@ -65,7 +66,7 @@ const ResultsTabs = ({ result, onRefresh, isRefreshing, onAlertCreated }: Result
           className="gap-2 font-mono text-micro tracking-widest uppercase border border-border-base bg-surface-1 text-txt-secondary hover:text-txt-primary hover:bg-surface-2 hover:border-border-strong rounded-sm h-8"
         >
           <RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} />
-          <span>REFRESH_ANALYSIS</span>
+          <span>Refresh analysis</span>
         </Button>
       </div>
 

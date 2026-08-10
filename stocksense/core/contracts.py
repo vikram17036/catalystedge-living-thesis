@@ -19,6 +19,8 @@ class EvidenceType(str, Enum):
     NEWS = "news"
     EVENT_STUDY = "event_study"
     BACKTEST = "backtest"
+    ANALOG_SEARCH = "analog_search"
+    SCENARIO = "scenario"
     DERIVED = "derived"
 
 
@@ -357,6 +359,130 @@ class BacktestResult(BaseModel):
     reproducibility: BacktestReproducibility
 
 
+# ---------------------------------------------------------------------------
+# Phase 5 — Historical Analog Search (shape match; code owns distance + forwards)
+# ---------------------------------------------------------------------------
+
+
+class AnalogSpec(BaseModel):
+    """Similarity on lookback only; post_window only affects forward outcomes / eligibility."""
+
+    ticker: str
+    lookback: int = Field(default=20, ge=2)
+    post_window: int = Field(default=5, ge=1)
+    top_k: int = Field(default=5, ge=1)
+    as_of: Optional[str] = Field(
+        default=None,
+        description="ISO date YYYY-MM-DD target endpoint; default = last price session",
+    )
+
+    @model_validator(mode="after")
+    def normalize_ticker(self) -> "AnalogSpec":
+        object.__setattr__(self, "ticker", self.ticker.strip().upper())
+        return self
+
+
+class AnalogMatch(BaseModel):
+    endpoint: str  # YYYY-MM-DD candidate end session C
+    lookback_start: str
+    lookback_end: str
+    distance: float
+    forward_return: float
+
+
+class AnalogReproducibility(BaseModel):
+    engine_version: str
+    price_source: str
+    price_mode: str
+    price_start: Optional[str] = None
+    price_end: Optional[str] = None
+    price_data_hash: str
+    as_of: Optional[str] = None
+    target_end: str
+    lookback: int
+    post_window: int
+    top_k: int
+
+
+class AnalogResult(BaseModel):
+    """Pure engine output. No evidence IDs / wall-clock timestamps."""
+
+    spec: AnalogSpec
+    candidate_windows: int
+    eligible_windows: int
+    matches_returned: int
+    excluded_overlap: int
+    excluded_future_coverage: int
+    excluded_lookahead: int
+    forward_mean: Optional[float] = None
+    forward_median: Optional[float] = None
+    positive_hit_rate: Optional[float] = None
+    matches: List[AnalogMatch] = Field(default_factory=list)
+    reproducibility: AnalogReproducibility
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Scenario Lab (hypothetical shock vs kills — NOT ThesisDiff)
+# ---------------------------------------------------------------------------
+
+
+class ScenarioKind(str, Enum):
+    ONE_DAY_RETURN_SHOCK = "one_day_return_shock"
+
+
+class ScenarioSpec(BaseModel):
+    ticker: str
+    kind: ScenarioKind = ScenarioKind.ONE_DAY_RETURN_SHOCK
+    shock_value: float = Field(description="e.g. -0.10 for a 10% one-day drop")
+    shock_metric: str = "one_day_return"
+    thesis_id: Optional[str] = None
+    as_of: Optional[str] = None
+
+    @model_validator(mode="after")
+    def normalize(self) -> "ScenarioSpec":
+        object.__setattr__(self, "ticker", self.ticker.strip().upper())
+        if self.kind != ScenarioKind.ONE_DAY_RETURN_SHOCK:
+            raise ValueError("Phase 6 supports only one_day_return_shock")
+        object.__setattr__(self, "shock_metric", "one_day_return")
+        return self
+
+
+class ScenarioCriterionOutcome(BaseModel):
+    id: str
+    label: str
+    kind: str
+    metric: Optional[str] = None
+    op: Optional[str] = None
+    threshold: Optional[float] = None
+    detail: Optional[str] = None
+
+
+class ScenarioReproducibility(BaseModel):
+    engine_version: str
+    thesis_id: str
+    thesis_version: int
+    criteria_hash: str
+    shock_metric: str
+    shock_value: float
+    as_of: Optional[str] = None
+
+
+class ScenarioResult(BaseModel):
+    """Pure scenario output — hypothetical vs kills only."""
+
+    spec: ScenarioSpec
+    triggered_criteria: List[ScenarioCriterionOutcome] = Field(default_factory=list)
+    not_triggered_criteria: List[ScenarioCriterionOutcome] = Field(default_factory=list)
+    skipped_unaffected_metric: List[ScenarioCriterionOutcome] = Field(default_factory=list)
+    skipped_qualitative: List[ScenarioCriterionOutcome] = Field(default_factory=list)
+    material: bool = False
+    criteria_evaluated: int = 0
+    criteria_triggered: int = 0
+    criteria_skipped_unaffected: int = 0
+    criteria_skipped_qualitative: int = 0
+    reproducibility: ScenarioReproducibility
+
+
 # Resolve forward refs for Pydantic v2
 Claim.model_rebuild()
 ThesisAssumption.model_rebuild()
@@ -368,3 +494,7 @@ EventStudySpec.model_rebuild()
 EventStudyResult.model_rebuild()
 StrategySpec.model_rebuild()
 BacktestResult.model_rebuild()
+AnalogSpec.model_rebuild()
+AnalogResult.model_rebuild()
+ScenarioSpec.model_rebuild()
+ScenarioResult.model_rebuild()

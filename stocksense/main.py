@@ -132,6 +132,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def request_id_and_latency(request: Request, call_next):
+    """Lightweight correlation: X-Request-Id + latency log (no OTel)."""
+    import time as _time
+    import uuid as _uuid
+
+    rid = request.headers.get("X-Request-Id") or str(_uuid.uuid4())
+    t0 = _time.perf_counter()
+    response = await call_next(request)
+    ms = int((_time.perf_counter() - t0) * 1000)
+    response.headers["X-Request-Id"] = rid
+    logger.info(
+        "request_id=%s method=%s path=%s status=%s latency_ms=%s",
+        rid,
+        request.method,
+        request.url.path,
+        response.status_code,
+        ms,
+    )
+    return response
+
 # Register auth routes (Stage 3: User Belief System)
 try:
     from stocksense.api.auth_routes import router as auth_router
@@ -154,7 +176,39 @@ try:
     app.include_router(lab_router)
     logger.info("Lab routes registered successfully")
 except ImportError as e:
-    logger.warning(f"Lab routes not available: {e}")
+    logger.error(f"Lab routes not available: {e}")
+
+# Phase 5 Historical Analog Search
+try:
+    from stocksense.api.analog_routes import router as analog_router
+    app.include_router(analog_router)
+    logger.info("Analog routes registered successfully")
+except ImportError as e:
+    logger.error(f"Analog routes not available: {e}")
+
+# Phase 6 Scenario Lab
+try:
+    from stocksense.api.scenario_routes import router as scenario_router
+    app.include_router(scenario_router)
+    logger.info("Scenario routes registered successfully")
+except ImportError as e:
+    logger.error(f"Scenario routes not available: {e}")
+
+# Phase 6 Thesis Dependency Graph
+try:
+    from stocksense.api.graph_routes import router as graph_router
+    app.include_router(graph_router)
+    logger.info("Thesis graph routes registered successfully")
+except ImportError as e:
+    logger.error(f"Thesis graph routes not available: {e}")
+
+# Phase 7 Research Agent + Memory
+try:
+    from stocksense.api.research_agent_routes import router as research_agent_router
+    app.include_router(research_agent_router)
+    logger.info("Research agent routes registered successfully")
+except ImportError as e:
+    logger.error(f"Research agent routes not available: {e}")
 
 
 def get_client_ip(request: Request) -> str:
@@ -168,45 +222,131 @@ def get_client_ip(request: Request) -> str:
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
     """
-    Enhanced health check with dependency status.
-    Returns detailed health information for monitoring.
+    Liveness — cheap, no outbound network.
+    Config flags only (env presence). Use /api/ready for dependency probes.
     """
-    health_status = {
-        "status": "ok",
+    google_ok = bool((os.getenv("GOOGLE_API_KEY") or "").strip())
+    news_ok = bool((os.getenv("NEWSAPI_KEY") or "").strip())
+    supabase_ok = bool(
+        (os.getenv("SUPABASE_URL") or "").strip()
+        and (os.getenv("SUPABASE_ANON_KEY") or "").strip()
+    )
+    pinecone_ok = bool(
+        (os.getenv("PINECONE_API_KEY") or "").strip()
+        and (os.getenv("PINECONE_INDEX") or "").strip()
+    )
+    status = "ok"
+    if not google_ok or not supabase_ok:
+        status = "degraded"
+    return {
+        "status": status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": API_VERSION,
-        "checks": {}
+        "checks": {
+            "google_api_key": {"configured": google_ok},
+            "newsapi_key": {"configured": news_ok},
+            "supabase": {"configured": supabase_ok},
+            "pinecone": {"configured": pinecone_ok},
+        },
     }
-    
-    # Check Google API key
-    try:
-        get_google_api_key()
-        health_status["checks"]["google_api_key"] = {"status": "ok"}
-    except ConfigurationError as e:
-        health_status["checks"]["google_api_key"] = {"status": "error", "message": str(e)}
-        health_status["status"] = "degraded"
-    
-    # Check NewsAPI key
-    try:
-        get_newsapi_key()
-        health_status["checks"]["newsapi_key"] = {"status": "ok"}
-    except ConfigurationError as e:
-        health_status["checks"]["newsapi_key"] = {"status": "error", "message": str(e)}
-        health_status["status"] = "degraded"
-    
-    # Check database
-    try:
-        from stocksense.db.database import get_all_cached_tickers_with_timestamps
-        tickers = get_all_cached_tickers_with_timestamps()
-        health_status["checks"]["database"] = {
-            "status": "ok",
-            "cached_analyses": len(tickers)
-        }
-    except Exception as e:
-        health_status["checks"]["database"] = {"status": "error", "message": str(e)}
-        health_status["status"] = "degraded"
-    
-    return health_status
+
+
+# Dependency probe cache for /api/ready (TTL seconds)
+_ready_cache: Dict[str, Any] = {"at": 0.0, "payload": None}
+_READY_TTL_SEC = 45.0
+
+
+def _probe_dependencies() -> Dict[str, Any]:
+    """Classify critical vs optional deps. Pinecone optional → degraded not dead."""
+    deps: Dict[str, Any] = {}
+    critical_ok = True
+    degraded = False
+
+    # Supabase (critical)
+    url = (os.getenv("SUPABASE_URL") or "").strip()
+    key = (os.getenv("SUPABASE_ANON_KEY") or "").strip()
+    if not url or not key:
+        deps["supabase"] = {"status": "error", "message": "not configured"}
+        critical_ok = False
+    else:
+        try:
+            from stocksense.db.supabase_client import get_supabase_client
+
+            client = get_supabase_client()
+            # cheap auth settings call or table head
+            client.table("theses").select("id").limit(1).execute()
+            deps["supabase"] = {"status": "ok"}
+        except Exception as e:
+            deps["supabase"] = {
+                "status": "error",
+                "message": str(e)[:200],
+            }
+            critical_ok = False
+
+    # Pinecone (optional — memory degrade)
+    pk = (os.getenv("PINECONE_API_KEY") or "").strip()
+    pi = (os.getenv("PINECONE_INDEX") or "").strip()
+    if not pk or not pi:
+        deps["pinecone"] = {"status": "degraded", "message": "not configured"}
+        degraded = True
+    else:
+        try:
+            from pinecone import Pinecone
+
+            stats = Pinecone(api_key=pk).Index(pi).describe_index_stats()
+            dim = getattr(stats, "dimension", None)
+            deps["pinecone"] = {"status": "ok", "dimension": dim}
+        except Exception as e:
+            deps["pinecone"] = {
+                "status": "degraded",
+                "message": str(e)[:200],
+            }
+            degraded = True
+
+    # NewsAPI (optional — analysis degrade)
+    if not (os.getenv("NEWSAPI_KEY") or "").strip():
+        deps["newsapi"] = {"status": "degraded", "message": "not configured"}
+        degraded = True
+    else:
+        deps["newsapi"] = {"status": "ok", "configured": True}
+
+    # Google (critical for LLM paths)
+    if not (os.getenv("GOOGLE_API_KEY") or "").strip():
+        deps["google"] = {"status": "error", "message": "not configured"}
+        critical_ok = False
+    else:
+        deps["google"] = {"status": "ok", "configured": True}
+
+    if not critical_ok:
+        ready_status = "unavailable"
+        ready = False
+    elif degraded:
+        ready_status = "degraded"
+        ready = True
+    else:
+        ready_status = "ok"
+        ready = True
+
+    return {
+        "ready": ready,
+        "status": ready_status,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": API_VERSION,
+        "dependencies": deps,
+    }
+
+
+@app.get("/api/ready")
+async def readiness() -> Dict[str, Any]:
+    """Readiness with short TTL-cached dependency probes."""
+    now = time.time()
+    cached = _ready_cache.get("payload")
+    if cached and (now - float(_ready_cache.get("at") or 0)) < _READY_TTL_SEC:
+        return cached
+    payload = _probe_dependencies()
+    _ready_cache["at"] = now
+    _ready_cache["payload"] = payload
+    return payload
 
 
 @app.get("/")

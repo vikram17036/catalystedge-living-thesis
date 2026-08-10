@@ -1,5 +1,5 @@
-/* Obsidian Terminal Design Tokens */
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+/* CatalystEdge — professional terminal tokens */
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,40 +7,38 @@
 
 @layer base {
   :root {
-    /* Enforce Dark Mode Only */
     color-scheme: dark;
 
-    /* Base canvas */
-    --canvas: #0A0A0A;
-    --surface-1: #111111;
-    --surface-2: #181818;
-    --surface-3: #1F1F1F;
+    /* Surfaces — cool neutral stack */
+    --canvas: #0c0d0f;
+    --surface-1: #12141a;
+    --surface-2: #181b22;
+    --surface-3: #22262f;
 
-    /* Borders — whisper quiet */
-    --border-subtle: rgba(255, 255, 255, 0.04);
-    --border-base: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.16);
-    --border-focus: rgba(245, 180, 0, 0.6);
+    /* Borders */
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-base: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --border-focus: rgba(212, 168, 75, 0.55);
 
-    /* Text hierarchy — 4 opacity levels */
-    --text-primary: rgba(255, 255, 255, 0.92);
-    --text-secondary: rgba(255, 255, 255, 0.60);
-    --text-tertiary: rgba(255, 255, 255, 0.35);
-    --text-muted: rgba(255, 255, 255, 0.18);
+    /* Text */
+    --text-primary: rgba(245, 245, 247, 0.94);
+    --text-secondary: rgba(245, 245, 247, 0.62);
+    --text-tertiary: rgba(245, 245, 247, 0.40);
+    --text-muted: rgba(245, 245, 247, 0.28);
 
-    /* Semantic — used as signals only */
-    --bull: #22C55E;
-    --bull-dim: rgba(34, 197, 94, 0.12);
-    --bear: #EF4444;
-    --bear-dim: rgba(239, 68, 68, 0.12);
-    --kill: #F97316;
-    --kill-dim: rgba(249, 115, 22, 0.12);
+    /* Semantic */
+    --bull: #3d9a6a;
+    --bull-dim: rgba(61, 154, 106, 0.12);
+    --bear: #d46565;
+    --bear-dim: rgba(212, 101, 101, 0.12);
+    --kill: #d4894a;
+    --kill-dim: rgba(212, 137, 74, 0.12);
 
-    /* Accent — single amber, for primary CTAs only */
-    --accent: #F5B400;
-    --accent-dim: rgba(245, 180, 0, 0.08);
+    /* Accent — reserved for primary CTAs / active nav */
+    --accent: #d4a84b;
+    --accent-dim: rgba(212, 168, 75, 0.10);
 
-    /* Spacing — 4px base unit */
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -49,12 +47,10 @@
     --space-8: 32px;
     --space-12: 48px;
 
-    /* Radius: sharp, technical */
-    --radius-sm: 2px;
-    --radius-md: 4px;
-    --radius-lg: 6px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
 
-    /* Typography scale */
     --type-micro: 11px;
     --type-sm: 12px;
     --type-base: 14px;
@@ -71,19 +67,47 @@
   body {
     background-color: var(--canvas);
     color: var(--text-primary);
-    font-family: 'Lora', serif;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
     font-size: var(--type-base);
-    line-height: 1.6;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--accent-dim);
+    color: var(--text-primary);
   }
 }
 
 @layer utilities {
   .font-mono {
-    font-family: 'Geist Mono', monospace;
+    font-family: 'Geist Mono', ui-monospace, monospace;
   }
+
   .font-serif {
-    font-family: 'Lora', serif;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+
+  /* Secondary / decorative chrome — visually quiet */
+  .ui-quiet {
+    color: var(--text-muted);
+  }
+
+  .ui-panel {
+    @apply rounded-md border border-border-base bg-surface-1;
+  }
+
+  .ui-label {
+    @apply font-mono text-micro font-medium uppercase tracking-[0.14em] text-txt-tertiary;
+  }
+
+  /* Hide scrollbars where overflow is intentional but chrome is noisy */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

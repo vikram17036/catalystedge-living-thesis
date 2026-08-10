@@ -69,17 +69,38 @@ def eval_deterministic(
     criterion: KillCriterion,
     metrics: Dict[str, Any],
 ) -> Optional[DiffItem]:
+    status = eval_deterministic_status(criterion, metrics)
+    if status != "triggered":
+        return None
+    raw = metrics.get(criterion.metric)
+    val = float(raw)
+    th = float(criterion.threshold)  # type: ignore[arg-type]
+    return DiffItem(
+        text=f"{criterion.label}: {criterion.metric}={val} {criterion.op} {th}",
+        evidence_ids=[],
+        criterion_id=criterion.id,
+    )
+
+
+def eval_deterministic_status(
+    criterion: KillCriterion,
+    metrics: Dict[str, Any],
+) -> Optional[str]:
+    """
+    Shared kill op evaluation.
+    Returns: 'triggered' | 'not_triggered' | 'missing_metric' | None (not deterministic / incomplete).
+    """
     if criterion.kind != KillCriterionKind.DETERMINISTIC:
         return None
     if not criterion.metric or criterion.op is None or criterion.threshold is None:
         return None
     raw = metrics.get(criterion.metric)
     if raw is None:
-        return None
+        return "missing_metric"
     try:
         val = float(raw)
     except (TypeError, ValueError):
-        return None
+        return "missing_metric"
     th = float(criterion.threshold)
     op = criterion.op
     hit = (
@@ -89,13 +110,7 @@ def eval_deterministic(
         or (op == "gte" and val >= th)
         or (op == "eq" and val == th)
     )
-    if not hit:
-        return None
-    return DiffItem(
-        text=f"{criterion.label}: {criterion.metric}={val} {op} {th}",
-        evidence_ids=[],
-        criterion_id=criterion.id,
-    )
+    return "triggered" if hit else "not_triggered"
 
 
 def parse_structured_kill_criteria(

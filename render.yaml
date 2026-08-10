@@ -1,7 +1,7 @@
-# Render deployment configuration for StockSense Agent
+# Render deployment configuration for CatalystEdge (P1–P8)
 
 services:
-  # Backend API Service (Living Thesis Phase 1)
+  # Backend API Service
   - type: web
     name: catalystedge-backend
     runtime: python
@@ -16,6 +16,10 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX
         sync: false
       - key: CORS_ORIGINS
         sync: false
@@ -32,4 +36,6 @@ services:
 # NOTE: React frontend → Vercel (root directory = frontend).
 # Set VITE_API_URL to this backend URL after first Render deploy.
 # Set CORS_ORIGINS on Render to the Vercel URL (comma-separated if multiple).
+# Set PINECONE_INDEX to your 768-dim cosine index name (e.g. catalystedge-research).
 # Free-tier tip: do not add a persistent disk; Blueprint will fail if you do.
+# Working memory (LangGraph InMemorySaver) is process-local — resets on cold start.

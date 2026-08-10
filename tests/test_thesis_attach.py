@@ -28,6 +28,23 @@ def test_valid_backtest():
     assert out["type"] == "backtest"
 
 
+def test_valid_analog_search():
+    out = validate_attach_payload(_ev(type="analog_search"), "NVDA")
+    assert out["type"] == "analog_search"
+
+
+def test_valid_scenario():
+    out = validate_attach_payload(
+        _ev(
+            type="scenario",
+            metric="scenario_one_day_return",
+            value=-0.1,
+        ),
+        "NVDA",
+    )
+    assert out["type"] == "scenario"
+
+
 def test_rejects_news_type():
     with pytest.raises(AttachError, match="evidence.type"):
         validate_attach_payload(_ev(type="news"), "NVDA")

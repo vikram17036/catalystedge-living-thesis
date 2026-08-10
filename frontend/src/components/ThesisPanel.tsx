@@ -1,6 +1,6 @@
 /**
  * ThesisPanel — Propose/Create thesis + Replay + Diff + Evidence Why
- * Phase 1 Living Thesis DoD
+ * Phase 1 Living Thesis DoD — content presentation (readable cards)
  */
 
 import { useMemo, useState } from 'react';
@@ -19,6 +19,11 @@ import ThesisEditor from './ThesisEditor';
 import type { AnalysisData } from '../types/api';
 import type { AnalysisSnapshot, CreateThesisRequest, ThesisComparison } from '../types/thesis';
 import { cn } from '../utils/cn';
+import {
+  formatAttachedEvidenceCard,
+  summarizeThesisCopy,
+  type AttachedEvidenceLike,
+} from '../utils/formatAttachedEvidence';
 
 interface ThesisPanelProps {
   analysis: AnalysisData;
@@ -33,6 +38,34 @@ function buildSnapshot(analysis: AnalysisData): AnalysisSnapshot {
     key_themes: (analysis.key_themes || []).map((t) => t.theme),
     timestamp: analysis.timestamp || new Date().toISOString(),
   };
+}
+
+function EvidenceCardView({
+  card,
+}: {
+  card: ReturnType<typeof formatAttachedEvidenceCard>;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-md border border-border-base bg-surface-1 px-3 py-2.5',
+        card.hypothetical && 'border-accent/35'
+      )}
+    >
+      <p className="ui-label">{card.kindLabel}</p>
+      <p className="mt-1 text-sm font-medium leading-snug text-txt-primary">
+        {card.title}
+      </p>
+      <p className="mt-0.5 text-micro leading-relaxed text-txt-secondary">
+        {card.detail}
+      </p>
+      {card.hypothetical ? (
+        <span className="mt-2 inline-block rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent">
+          Hypothetical
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelProps) {
@@ -50,15 +83,25 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
 
   const snapshot = useMemo(() => buildSnapshot(analysis), [analysis]);
   const evidenceLedger = analysis.evidence_ledger as
-    | { id?: string; metric?: string; value?: unknown; type?: string; source?: string }[]
+    | AttachedEvidenceLike[]
     | undefined;
 
   const activeDiff = diffResult || comparison.data || null;
   const originEvidence =
     (activeThesis?.origin_evidence as typeof evidenceLedger) || evidenceLedger || [];
-  const attachedEvidence = (activeThesis?.attached_evidence || []) as NonNullable<
-    typeof evidenceLedger
-  >;
+  const attachedEvidence = (activeThesis?.attached_evidence ||
+    []) as AttachedEvidenceLike[];
+
+  const thesisCopy = useMemo(() => {
+    if (!activeThesis) return null;
+    return summarizeThesisCopy({
+      summary: activeThesis.thesis_summary,
+      conviction: activeThesis.conviction_level,
+      snapshot:
+        (activeThesis.origin_analysis_snapshot as AnalysisSnapshot | undefined) ||
+        snapshot,
+    });
+  }, [activeThesis, snapshot]);
 
   const handleProposeAndCreate = async () => {
     setError(null);
@@ -115,8 +158,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       setDiffResult(result);
       await comparison.refetch();
       onAlertCreated?.();
-    } catch (e) {
-      // Fallback label for non-NVDA
+    } catch {
       try {
         const result = await replay.mutateAsync({
           thesisId: activeThesis.id,
@@ -132,89 +174,116 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   };
 
   const pending = propose.isPending || createThesis.isPending;
+  const research = attachedEvidence.filter(
+    (e) => String(e.type || '').toLowerCase() !== 'scenario'
+  );
+  const whatIfs = attachedEvidence.filter(
+    (e) => String(e.type || '').toLowerCase() === 'scenario'
+  );
 
   return (
-    <div className="border border-border-base bg-surface-1 rounded-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border-base bg-surface-2">
-        <h3 className="text-micro font-mono font-bold uppercase tracking-widest text-accent">
-          LIVING_THESIS
-        </h3>
-        <span className="text-micro font-mono text-txt-muted uppercase tracking-widest">
-          {activeThesis ? 'ACTIVE' : 'NO_THESIS'}
+    <div className="ui-panel overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border-base px-4 py-2.5">
+        <h3 className="ui-label text-txt-secondary">Living thesis</h3>
+        <span className="font-mono text-micro tracking-wide text-txt-muted">
+          {activeThesis ? 'Active' : 'No thesis'}
         </span>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="space-y-4 p-4">
         {!user && (
-          <p className="text-micro font-mono text-txt-muted uppercase tracking-widest flex items-center gap-2">
+          <p className="flex items-center gap-2 text-sm text-txt-tertiary">
             <AlertTriangle className="h-3.5 w-3.5 text-accent" />
             Sign in to freeze a thesis snapshot and run Replay.
           </p>
         )}
 
-        {activeThesis ? (
+        {activeThesis && thesisCopy ? (
           <>
-            <p className="font-mono text-micro text-txt-secondary leading-relaxed uppercase tracking-wide">
-              {'> '} {activeThesis.thesis_summary.slice(0, 220)}
-              {activeThesis.thesis_summary.length > 220 ? '…' : ''}
-            </p>
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-txt-primary">
+                {thesisCopy.headline}
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed text-txt-secondary">
+                {thesisCopy.body}
+              </p>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 size="sm"
                 onClick={handleReplay}
                 disabled={replay.isPending}
-                className="gap-2 font-mono text-micro uppercase tracking-widest rounded-sm h-8"
+                className="h-8 gap-2"
               >
                 {replay.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <Play className="h-3 w-3" />
                 )}
-                REPLAY_ADVERSE
+                Replay adverse
               </Button>
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setEditorOpen(true)}
-                className="font-mono text-micro uppercase tracking-widest border border-border-base rounded-sm h-8"
+                className="h-8"
               >
-                EDIT_THESIS
+                Edit thesis
               </Button>
             </div>
 
-            <div className="border border-border-base/60 bg-surface-2/40 rounded-sm p-3 space-y-1">
-              <p className="text-micro font-mono font-bold uppercase tracking-widest text-accent">
-                ATTACHED_EXPERIMENTS ({attachedEvidence.length})
+            <div className="space-y-2">
+              <p className="ui-label">
+                Attached research · {research.length}
               </p>
-              {attachedEvidence.length === 0 ? (
-                <p className="text-micro font-mono text-txt-muted uppercase tracking-wide">
-                  None yet — Research/Lab → ATTACH_TO_THESIS
-                  {(activeThesis as { attached_evidence_error?: string })
-                    ?.attached_evidence_error
-                    ? ` · load error: ${(activeThesis as { attached_evidence_error?: string }).attached_evidence_error}`
-                    : ''}
+              {research.length === 0 ? (
+                <p className="text-sm text-txt-muted">
+                  None yet — attach from Research, Lab, or Analogs.
                 </p>
               ) : (
-                attachedEvidence.map((e, i) => (
-                  <div
-                    key={(e.id as string) || i}
-                    className="text-micro font-mono text-txt-secondary uppercase tracking-wide"
-                  >
-                    {String(e.type || 'research')} · {String(e.metric || '—')} ={' '}
-                    {String(e.value ?? '—')}
-                  </div>
-                ))
+                <div className="space-y-2">
+                  {research.map((e, i) => (
+                    <EvidenceCardView
+                      key={String(e.id || i)}
+                      card={formatAttachedEvidenceCard(e, i)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="ui-label">Attached what-ifs · {whatIfs.length}</p>
+              {whatIfs.length === 0 ? (
+                <p className="text-sm text-txt-muted">
+                  None yet — attach from Scenarios (always hypothetical).
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {whatIfs.map((e, i) => (
+                    <EvidenceCardView
+                      key={String(e.id || i)}
+                      card={formatAttachedEvidenceCard(e, i)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
 
             <ThesisDiffView
               comparison={activeDiff}
               originEvidence={originEvidence}
-              attachedEvidence={attachedEvidence}
+              attachedEvidence={research}
               replayEvidence={[]}
             />
+            {whatIfs.length > 0 && (
+              <p className="px-1 text-micro text-txt-muted">
+                Attached what-ifs are hypothetical and excluded from Diff baseline.
+              </p>
+            )}
           </>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -223,34 +292,30 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               size="sm"
               onClick={handleProposeAndCreate}
               disabled={!user || pending}
-              className={cn(
-                'gap-2 font-mono text-micro uppercase tracking-widest rounded-sm h-8'
-              )}
+              className="h-8 gap-2"
             >
               {pending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Sparkles className="h-3 w-3" />
               )}
-              PROPOSE_AND_CREATE_THESIS
+              Propose & create thesis
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => setEditorOpen(true)}
               disabled={!user}
-              className="font-mono text-micro uppercase tracking-widest border border-border-base rounded-sm h-8 gap-2"
+              className="h-8 gap-2"
             >
               <BookMarked className="h-3 w-3" />
-              CUSTOMIZE
+              Customize
             </Button>
           </div>
         )}
 
-        {error && (
-          <p className="text-micro font-mono text-bear uppercase tracking-widest">{error}</p>
-        )}
+        {error && <p className="text-sm text-bear">{error}</p>}
       </div>
 
       <ThesisEditor

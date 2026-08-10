@@ -33,7 +33,15 @@ def fetch_adjusted_closes(
     pad_post = max(30, (post_window + 5) * 2)
     start = (_parse_date(first) - timedelta(days=pad_pre)).isoformat()
     end = (_parse_date(last) + timedelta(days=pad_post)).isoformat()
+    return fetch_adjusted_closes_range(ticker, start, end)
 
+
+def fetch_adjusted_closes_range(
+    ticker: str,
+    start: str,
+    end: Optional[str] = None,
+) -> PriceSeries:
+    """Fetch adjusted closes for [start, end) via yfinance."""
     hist = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=True)
     if hist is None or hist.empty:
         raise ValueError(f"No price history for {ticker}")

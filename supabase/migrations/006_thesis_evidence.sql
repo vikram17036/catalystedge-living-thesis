@@ -7,7 +7,7 @@ create table if not exists public.thesis_evidence (
   user_id uuid not null references auth.users(id) on delete cascade,
   evidence_id text not null,
   evidence_type text not null
-    check (evidence_type in ('event_study', 'backtest')),
+    check (evidence_type in ('event_study', 'backtest', 'analog_search', 'scenario')),
   evidence jsonb not null,
   attached_at timestamptz not null default now(),
   unique (thesis_id, evidence_id)

@@ -71,8 +71,8 @@ export default function ResearchPage() {
       const n = res.thesis?.attached_evidence?.length ?? 0;
       setAttachMsg(
         res.already_attached
-          ? `Already attached (${n} on thesis). Open dashboard LIVING_THESIS.`
-          : `Attached (${n} on thesis — origin unchanged). Open dashboard LIVING_THESIS.`
+          ? `Already attached (${n} on thesis). Open the living thesis on the dashboard.`
+          : `Attached (${n} on thesis — origin unchanged). Open the living thesis on the dashboard.`
       );
       await queryClient.invalidateQueries({ queryKey: thesisKeys.all });
       await queryClient.invalidateQueries({
@@ -164,10 +164,7 @@ export default function ResearchPage() {
             <button
               key={chip}
               type="button"
-              onClick={() => {
-                setQuestion(chip);
-                void submit(chip);
-              }}
+              onClick={() => setQuestion(chip)}
               className="rounded-sm border border-border-base bg-surface-2 px-2.5 py-1 font-mono text-micro text-txt-secondary hover:border-accent hover:text-accent"
             >
               {chip}
@@ -197,16 +194,13 @@ export default function ResearchPage() {
                   {spec.ticker} × FOMC
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-                    {result.reproducibility.engine_version} · {spec.calendar_id}
-                  </span>
                   <button
                     type="button"
                     onClick={() => void attachToThesis()}
                     disabled={attaching}
-                    className="rounded-sm border border-accent bg-accent/10 px-2.5 py-1 font-mono text-micro font-bold uppercase tracking-widest text-accent hover:bg-accent/20 disabled:opacity-40"
+                    className="rounded-md border border-accent bg-accent/10 px-2.5 py-1 text-micro font-semibold tracking-wide text-accent hover:bg-accent/20 disabled:opacity-40"
                   >
-                    {attaching ? '…' : 'ATTACH_TO_THESIS'}
+                    {attaching ? '…' : 'Attach to thesis'}
                   </button>
                 </div>
               </div>
@@ -214,7 +208,7 @@ export default function ResearchPage() {
                 <p className="mt-2 font-mono text-micro text-txt-secondary">{attachMsg}</p>
               )}
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <div className="font-mono text-micro uppercase tracking-widest text-txt-muted">
                     Filter
@@ -251,14 +245,6 @@ export default function ResearchPage() {
                     {result.excluded_events > 0
                       ? ` · ${result.excluded_events} excluded`
                       : ''}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-                    Price hash
-                  </div>
-                  <div className="mt-1 truncate font-mono text-micro text-txt-secondary">
-                    {result.reproducibility.price_data_hash}
                   </div>
                 </div>
               </div>
@@ -320,12 +306,20 @@ export default function ResearchPage() {
                 ) : (
                   <ChevronRight className="h-4 w-4" />
                 )}
-                Why / Spec Diff
+                Why / reproducibility
               </button>
               {showWhy && (
-                <pre className="overflow-x-auto border-t border-border-base bg-surface-2/40 px-5 py-3 font-mono text-micro text-txt-secondary">
-                  {JSON.stringify(response.spec_diff, null, 2)}
-                </pre>
+                <div className="space-y-2 overflow-x-auto border-t border-border-base bg-surface-2/40 px-5 py-3 font-mono text-micro text-txt-secondary">
+                  <p>
+                    {result.reproducibility.engine_version} · {spec.calendar_id}
+                  </p>
+                  <p className="break-all">
+                    Price hash · {result.reproducibility.price_data_hash}
+                  </p>
+                  <pre className="overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(response.spec_diff, null, 2)}
+                  </pre>
+                </div>
               )}
             </section>
 

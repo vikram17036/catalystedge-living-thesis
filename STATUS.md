@@ -44,7 +44,7 @@ LAB: 20/50 SMA NVDA → costs → show DD/hit rate (no spec mutation).
 
 **UI:** ATTACH_TO_THESIS on RESEARCH + LAB; ATTACHED_EXPERIMENTS on ThesisPanel; WHY = ORIGIN | ATTACHED | CURRENT (Diff math still origin vs current only).
 
-**Required once in Supabase SQL editor:** run `supabase/migrations/006_thesis_evidence.sql`
+**Required in Supabase SQL editor:** `006_thesis_evidence.sql`, then **`007_thesis_evidence_grants.sql`** (grants/RLS — without this, attach can look successful but nothing persists).
 
 ### Hero demo
 
@@ -66,7 +66,7 @@ Replay → Diff still uses original baseline; WHY shows three sections
 
 # NEXT
 
-Deploy when you want (Render + Vercel + run migration on prod Supabase).  
+**Deploy (in progress):** push main → Render backend + Vercel frontend; run `006` + `007` on **prod** Supabase SQL editor.
 
 Then Phase 5+ only when intentional:
 
@@ -94,5 +94,6 @@ npm run dev
 
 1. P1–P3 as above.  
 2. Phase 4: `thesis_evidence` + attach APIs + UI; origin/Diff untouched.  
+3. Phase 4 fix: fail hard on empty insert, grants migration `007`, cache invalidate, always show ATTACHED_EXPERIMENTS count.  
 
 *Maintain only this file for what’s done / what’s next.*

@@ -30,6 +30,7 @@ export interface Thesis {
   origin_evidence?: Record<string, unknown>[];
   /** Phase 4 — attached research; never Diff baseline */
   attached_evidence?: Record<string, unknown>[];
+  attached_evidence_error?: string;
   structured_kill_criteria?: Record<string, unknown>[];
   created_at: string;
   updated_at: string;

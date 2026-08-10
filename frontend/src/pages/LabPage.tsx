@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, LineChart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import {
   runBacktest,
@@ -8,7 +9,7 @@ import {
   type BacktestResult,
   type StrategySpec,
 } from '../api/strategyLab';
-import { attachEvidenceByTicker } from '../api/theses';
+import { attachEvidenceByTicker, thesisKeys } from '../api/theses';
 
 const CHIPS = [
   'Backtest a 20/50 SMA crossover on NVDA since 2020.',
@@ -23,6 +24,7 @@ function pct(v: number | null | undefined): string {
 
 export default function LabPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [question, setQuestion] = useState(CHIPS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +47,16 @@ export default function LabPage() {
     setAttachMsg(null);
     try {
       const res = await attachEvidenceByTicker(ticker, ev);
+      const n = res.thesis?.attached_evidence?.length ?? 0;
       setAttachMsg(
         res.already_attached
-          ? 'Already attached to thesis.'
-          : 'Attached to thesis (thesis_evidence — origin unchanged).'
+          ? `Already attached (${n} on thesis). Open dashboard LIVING_THESIS.`
+          : `Attached (${n} on thesis — origin unchanged). Open dashboard LIVING_THESIS.`
       );
+      await queryClient.invalidateQueries({ queryKey: thesisKeys.all });
+      await queryClient.invalidateQueries({
+        queryKey: thesisKeys.byTicker(ticker),
+      });
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { detail?: string } }; message?: string })?.response

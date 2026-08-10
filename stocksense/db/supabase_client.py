@@ -299,11 +299,23 @@ def get_thesis_history(user_id: str, access_token: str, thesis_id: str) -> list:
         return []
 
 
+def _authed_supabase(access_token: str) -> Client:
+    """Fresh client + user JWT so RLS auth.uid() is reliable (avoid singleton race)."""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_ANON_KEY")
+    if not url or not key:
+        raise SupabaseAuthError(
+            "Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env"
+        )
+    client = create_client(url, key)
+    client.postgrest.auth(access_token)
+    return client
+
+
 def list_thesis_evidence(user_id: str, access_token: str, thesis_id: str) -> list:
     """List attached research evidence for a thesis (not origin_evidence)."""
     try:
-        client = get_supabase_client()
-        client.postgrest.auth(access_token)
+        client = _authed_supabase(access_token)
         response = (
             client.table("thesis_evidence")
             .select("*")
@@ -315,7 +327,8 @@ def list_thesis_evidence(user_id: str, access_token: str, thesis_id: str) -> lis
         return response.data or []
     except Exception as e:
         logger.error(f"thesis_evidence list error: {e}")
-        return []
+        # Surface missing-table / RLS failures instead of pretending there are zero rows
+        raise
 
 
 def attach_thesis_evidence(
@@ -331,8 +344,7 @@ def attach_thesis_evidence(
     """
     from stocksense.core.thesis_attach import AttachError, validate_attach_payload
 
-    client = get_supabase_client()
-    client.postgrest.auth(access_token)
+    client = _authed_supabase(access_token)
 
     thesis_resp = (
         client.table("theses")
@@ -373,8 +385,20 @@ def attach_thesis_evidence(
         "evidence_type": etype,
         "evidence": normalized,
     }
-    inserted = client.table("thesis_evidence").insert(insert).execute()
-    row = inserted.data[0] if inserted.data else insert
+    try:
+        inserted = client.table("thesis_evidence").insert(insert).execute()
+    except Exception as e:
+        raise AttachError(
+            f"thesis_evidence insert failed (table/RLS/grants?): {e}"
+        ) from e
+
+    if not inserted.data:
+        raise AttachError(
+            "thesis_evidence insert returned no row — check RLS policies and "
+            "GRANT for authenticated on public.thesis_evidence"
+        )
+
+    row = inserted.data[0]
     return {
         "attached": True,
         "already_attached": False,
@@ -397,8 +421,15 @@ def get_active_thesis_for_ticker(
 def enrich_thesis_with_attachments(
     user_id: str, access_token: str, thesis: Dict[str, Any]
 ) -> Dict[str, Any]:
-    rows = list_thesis_evidence(user_id, access_token, thesis["id"])
     out = dict(thesis)
+    try:
+        rows = list_thesis_evidence(user_id, access_token, thesis["id"])
+    except Exception as e:
+        logger.error(f"enrich attachments failed for {thesis.get('id')}: {e}")
+        out["attached_evidence"] = []
+        out["attached_evidence_rows"] = []
+        out["attached_evidence_error"] = str(e)
+        return out
     out["attached_evidence"] = [r.get("evidence") for r in rows if r.get("evidence")]
     out["attached_evidence_rows"] = rows
     return out

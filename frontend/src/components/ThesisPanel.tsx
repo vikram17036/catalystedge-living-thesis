@@ -184,12 +184,20 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               </Button>
             </div>
 
-            {attachedEvidence.length > 0 && (
-              <div className="border border-border-base/60 bg-surface-2/40 rounded-sm p-3 space-y-1">
-                <p className="text-micro font-mono font-bold uppercase tracking-widest text-accent">
-                  ATTACHED_EXPERIMENTS
+            <div className="border border-border-base/60 bg-surface-2/40 rounded-sm p-3 space-y-1">
+              <p className="text-micro font-mono font-bold uppercase tracking-widest text-accent">
+                ATTACHED_EXPERIMENTS ({attachedEvidence.length})
+              </p>
+              {attachedEvidence.length === 0 ? (
+                <p className="text-micro font-mono text-txt-muted uppercase tracking-wide">
+                  None yet — Research/Lab → ATTACH_TO_THESIS
+                  {(activeThesis as { attached_evidence_error?: string })
+                    ?.attached_evidence_error
+                    ? ` · load error: ${(activeThesis as { attached_evidence_error?: string }).attached_evidence_error}`
+                    : ''}
                 </p>
-                {attachedEvidence.map((e, i) => (
+              ) : (
+                attachedEvidence.map((e, i) => (
                   <div
                     key={(e.id as string) || i}
                     className="text-micro font-mono text-txt-secondary uppercase tracking-wide"
@@ -197,9 +205,9 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                     {String(e.type || 'research')} · {String(e.metric || '—')} ={' '}
                     {String(e.value ?? '—')}
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
 
             <ThesisDiffView
               comparison={activeDiff}

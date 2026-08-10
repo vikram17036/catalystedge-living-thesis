@@ -29,3 +29,6 @@ create policy "Users insert own thesis_evidence"
 create policy "Users delete own thesis_evidence"
   on public.thesis_evidence for delete
   using (auth.uid() = user_id);
+
+grant select, insert, delete on table public.thesis_evidence to authenticated;
+grant all on table public.thesis_evidence to service_role;

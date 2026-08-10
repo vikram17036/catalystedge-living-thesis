@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FlaskConical, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import {
   runEventStudy,
@@ -8,7 +9,7 @@ import {
   type EventStudySpec,
   type WindowStats,
 } from '../api/eventStudy';
-import { attachEvidenceByTicker } from '../api/theses';
+import { attachEvidenceByTicker, thesisKeys } from '../api/theses';
 import { cn } from '../utils/cn';
 
 const CHIPS = [
@@ -44,6 +45,7 @@ function StatsRow({ label, stats }: { label: string; stats: WindowStats }) {
 
 export default function ResearchPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [question, setQuestion] = useState(CHIPS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +68,16 @@ export default function ResearchPage() {
     setAttachMsg(null);
     try {
       const res = await attachEvidenceByTicker(ticker, ev);
+      const n = res.thesis?.attached_evidence?.length ?? 0;
       setAttachMsg(
         res.already_attached
-          ? 'Already attached to thesis.'
-          : 'Attached to thesis (thesis_evidence — origin unchanged).'
+          ? `Already attached (${n} on thesis). Open dashboard LIVING_THESIS.`
+          : `Attached (${n} on thesis — origin unchanged). Open dashboard LIVING_THESIS.`
       );
+      await queryClient.invalidateQueries({ queryKey: thesisKeys.all });
+      await queryClient.invalidateQueries({
+        queryKey: thesisKeys.byTicker(ticker),
+      });
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { detail?: string } }; message?: string })?.response

@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import type { 
   Thesis, 
   ThesesResponse, 
@@ -17,6 +17,19 @@ import type {
 import { supabase } from '../utils/supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+/** Surface FastAPI `detail` when present. */
+export function thesisApiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const ax = err as AxiosError<{ detail?: string | { msg?: string }[] }>;
+    const detail = ax.response?.data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+    if (ax.message) return ax.message;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
 
 /**
  * Get authorization header with current session token
@@ -36,12 +49,14 @@ const createThesisClient = async () => {
   const headers = await getAuthHeader();
   return axios.create({
     baseURL: API_BASE_URL,
+    timeout: 45_000,
     headers: {
       'Content-Type': 'application/json',
       ...headers,
     },
   });
 };
+
 
 // Query keys
 export const thesisKeys = {
@@ -99,6 +114,28 @@ export function useCreateThesis() {
     },
     onSuccess: (data) => {
       // Invalidate queries to refetch
+      queryClient.invalidateQueries({ queryKey: thesisKeys.all });
+      queryClient.invalidateQueries({ queryKey: thesisKeys.byTicker(data.ticker) });
+    },
+  });
+}
+
+/**
+ * Close active theses for ticker and create a replacement in one request.
+ * Pinecone indexing is deferred on the server.
+ */
+export function useStartNewThesis() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      thesis: CreateThesisRequest & { change_reason?: string }
+    ) => {
+      const client = await createThesisClient();
+      const { data } = await client.post<Thesis>('/api/theses/start-new', thesis);
+      return data;
+    },
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: thesisKeys.all });
       queryClient.invalidateQueries({ queryKey: thesisKeys.byTicker(data.ticker) });
     },

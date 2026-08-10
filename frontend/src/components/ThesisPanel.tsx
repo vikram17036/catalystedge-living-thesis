@@ -13,7 +13,8 @@ import {
   useThesisComparison,
   useReplayThesis,
   useProposeThesisFromAnalysis,
-  useUpdateThesis,
+  useStartNewThesis,
+  thesisApiErrorMessage,
 } from '../api/theses';
 import ThesisDiffView from './ThesisDiffView';
 import ThesisEditor from './ThesisEditor';
@@ -104,13 +105,14 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
 
   const comparison = useThesisComparison(activeThesis?.id ?? null);
   const createThesis = useCreateThesis();
-  const updateThesis = useUpdateThesis();
+  const startNewThesis = useStartNewThesis();
   const propose = useProposeThesisFromAnalysis();
   const replay = useReplayThesis();
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmNewOpen, setConfirmNewOpen] = useState(false);
   const [diffResult, setDiffResult] = useState<ThesisComparison | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [startNewError, setStartNewError] = useState<string | null>(null);
 
   const snapshot = useMemo(() => buildSnapshot(analysis), [analysis]);
   const evidenceLedger = analysis.evidence_ledger as
@@ -136,7 +138,41 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
 
   const createdLabel = formatCreated(activeThesis?.created_at);
 
-  const createFromLatestAnalysis = async () => {
+  const createFromLatestAnalysis = async (opts?: { skipLlmPropose?: boolean }) => {
+    // Fast path for “start new”: skip /from-analysis Gemini polish; build locally.
+    if (opts?.skipLlmPropose) {
+      const sentiment = analysis.overall_sentiment || 'Unknown';
+      const conf = analysis.overall_confidence ?? 0;
+      const summary =
+        (analysis.summary || '').trim().length >= 10
+          ? analysis.summary!.trim()
+          : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
+      const kill = [
+        'One-day drop greater than 5%',
+      ];
+      const body: CreateThesisRequest = {
+        ticker: ticker.toUpperCase(),
+        thesis_summary: summary.slice(0, 2000),
+        conviction_level: conf >= 0.75 ? 'high' : conf >= 0.45 ? 'medium' : 'low',
+        kill_criteria: kill,
+        origin_analysis_id: analysis.id,
+        origin_analysis_snapshot: snapshot,
+        origin_evidence: evidenceLedger as Record<string, unknown>[] | undefined,
+        structured_kill_criteria: [
+          {
+            id: 'kc_day_drop',
+            kind: 'deterministic',
+            label: 'One-day drop greater than 5%',
+            metric: 'one_day_return',
+            op: 'lte',
+            threshold: -0.05,
+          },
+        ],
+      };
+      await createThesis.mutateAsync(body);
+      return;
+    }
+
     const proposal = await propose.mutateAsync({
       ticker,
       analysis: {
@@ -179,35 +215,54 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       await createFromLatestAnalysis();
       await refetch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create thesis');
+      setError(thesisApiErrorMessage(e, 'Failed to create thesis'));
     }
   };
 
   const handleStartNewThesis = async () => {
+    setStartNewError(null);
     setError(null);
     if (!user || !activeThesis) return;
     try {
-      const actives = theses.filter((t: Thesis) => isActiveStatus(t.status));
-      for (const t of actives) {
-        await updateThesis.mutateAsync({
-          thesisId: t.id,
-          updates: {
-            status: 'exited',
-            change_reason:
-              'Closed to start a new active thesis from the latest analysis',
+      const sentiment = analysis.overall_sentiment || 'Unknown';
+      const conf = analysis.overall_confidence ?? 0;
+      const summary =
+        (analysis.summary || '').trim().length >= 10
+          ? analysis.summary!.trim()
+          : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
+
+      await startNewThesis.mutateAsync({
+        ticker: ticker.toUpperCase(),
+        thesis_summary: summary.slice(0, 2000),
+        conviction_level: conf >= 0.75 ? 'high' : conf >= 0.45 ? 'medium' : 'low',
+        kill_criteria: ['One-day drop greater than 5%'],
+        origin_analysis_id: analysis.id,
+        origin_analysis_snapshot: snapshot,
+        origin_evidence: evidenceLedger as Record<string, unknown>[] | undefined,
+        structured_kill_criteria: [
+          {
+            id: 'kc_day_drop',
+            kind: 'deterministic',
+            label: 'One-day drop greater than 5%',
+            metric: 'one_day_return',
+            op: 'lte',
+            threshold: -0.05,
           },
-        });
-      }
-      await createFromLatestAnalysis();
+        ],
+        change_reason:
+          'Closed to start a new active thesis from the latest analysis',
+      });
       setDiffResult(null);
       setConfirmNewOpen(false);
+      setStartNewError(null);
       await refetch();
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Failed to start a new thesis'
-      );
+      const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
+      setStartNewError(msg);
+      setError(msg);
     }
   };
+
 
   const handleReplay = async () => {
     if (!activeThesis) return;
@@ -237,7 +292,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   };
 
   const pending =
-    propose.isPending || createThesis.isPending || updateThesis.isPending;
+    propose.isPending || createThesis.isPending || startNewThesis.isPending;
   const research = attachedEvidence.filter(
     (e) => String(e.type || '').toLowerCase() !== 'scenario'
   );
@@ -424,24 +479,30 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               and create a new <span className="text-txt-primary">active</span>{' '}
               thesis from the latest analysis.
             </p>
+            {startNewError ? (
+              <p className="mt-3 text-sm text-bear">{startNewError}</p>
+            ) : null}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={pending}
-                onClick={() => setConfirmNewOpen(false)}
+                disabled={startNewThesis.isPending}
+                onClick={() => {
+                  setConfirmNewOpen(false);
+                  setStartNewError(null);
+                }}
               >
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
-                disabled={pending}
+                disabled={startNewThesis.isPending}
                 onClick={() => void handleStartNewThesis()}
                 className="gap-2"
               >
-                {pending ? (
+                {startNewThesis.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : null}
                 Close current & create new

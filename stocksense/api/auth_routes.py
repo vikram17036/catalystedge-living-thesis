@@ -5,7 +5,7 @@ Stage 3: User Belief System
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from stocksense.db.supabase_client import (
@@ -26,10 +26,28 @@ from stocksense.db.supabase_client import (
 router = APIRouter(prefix="/api", tags=["User"])
 
 
+def _schedule_thesis_index(
+    background_tasks: BackgroundTasks, user_id: str, thesis: Optional[dict]
+) -> None:
+    """Best-effort Pinecone refresh after the HTTP response (never blocks UI)."""
+    if not thesis or not thesis.get("id"):
+        return
+
+    def _run() -> None:
+        try:
+            from stocksense.memory.indexer import index_thesis
+
+            index_thesis(user_id, thesis)
+        except Exception:
+            pass
+
+    background_tasks.add_task(_run)
+
+
 @router.get("/phase1-ping")
 async def phase1_ping():
     """Health marker to confirm latest auth_routes is loaded."""
-    return {"phase1": True, "routes": ["from-analysis", "evaluate"]}
+    return {"phase1": True, "routes": ["from-analysis", "evaluate", "start-new"]}
 
 
 # ============================================
@@ -212,13 +230,61 @@ async def list_theses(ticker: Optional[str] = None, user = Depends(get_current_u
 
 
 @router.post("/theses", response_model=ThesisResponse)
-async def add_thesis(thesis: ThesisCreate, user = Depends(get_current_user)):
+async def add_thesis(
+    thesis: ThesisCreate,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
     """Create a new investment thesis with kill criteria."""
     result = create_thesis(user["id"], user["access_token"], thesis.model_dump())
-    
+
     if not result:
         raise HTTPException(status_code=400, detail="Failed to create thesis")
-    
+
+    _schedule_thesis_index(background_tasks, user["id"], result)
+    return enrich_thesis_with_attachments(user["id"], user["access_token"], result)
+
+
+class StartNewThesisRequest(ThesisCreate):
+    change_reason: Optional[str] = (
+        "Closed to start a new active thesis from the latest analysis"
+    )
+
+
+@router.post("/theses/start-new", response_model=ThesisResponse)
+async def start_new_thesis(
+    body: StartNewThesisRequest,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
+    """
+    Close all active/validated theses for the ticker, then create a new active one.
+    Attachments/history/graph on the old thesis stay put. Pinecone is deferred.
+    """
+    ticker = body.ticker.upper().strip()
+    reason = body.change_reason or (
+        "Closed to start a new active thesis from the latest analysis"
+    )
+    existing = get_user_theses(user["id"], user["access_token"], ticker)
+    for t in existing:
+        status = (t.get("status") or "active").lower()
+        if status in ("active", "validated"):
+            closed = update_thesis(
+                user["id"],
+                user["access_token"],
+                str(t["id"]),
+                {"status": "exited", "change_reason": reason},
+            )
+            if closed:
+                _schedule_thesis_index(background_tasks, user["id"], closed)
+
+    create_payload = body.model_dump(exclude={"change_reason"})
+    create_payload["ticker"] = ticker
+    result = create_thesis(user["id"], user["access_token"], create_payload)
+    if not result:
+        raise HTTPException(status_code=400, detail="Failed to create replacement thesis")
+
+    _schedule_thesis_index(background_tasks, user["id"], result)
     return enrich_thesis_with_attachments(user["id"], user["access_token"], result)
 
 
@@ -350,19 +416,26 @@ async def attach_evidence_to_thesis(
 
 
 @router.patch("/theses/{thesis_id}", response_model=ThesisResponse)
-async def modify_thesis(thesis_id: str, updates: ThesisUpdate, user = Depends(get_current_user)):
+async def modify_thesis(
+    thesis_id: str,
+    updates: ThesisUpdate,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
     """Update a thesis. Changes are tracked in history."""
     # Filter out None values
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-    
+
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     result = update_thesis(user["id"], user["access_token"], thesis_id, update_data)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="Thesis not found")
-    
+
+    # Refresh semantic memory after content OR status changes (best-effort, async)
+    _schedule_thesis_index(background_tasks, user["id"], result)
     return result
 
 

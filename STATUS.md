@@ -83,5 +83,6 @@ npm run dev
 1. P1–P7 as above.  
 2. Phase 8: measure agent, expose receipt, harden health/deps, pin deploy deps.  
 3. Demo UI polish: grey hierarchy, human evidence cards, Agent loading, chip fill-only.  
+4. Start-new thesis: close preserves dependents; `/api/theses/start-new` is one fast Supabase round-trip; Pinecone index deferred via BackgroundTasks (does not block UI).  
 
 *Maintain only this file for what’s done / what’s next.*

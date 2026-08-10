@@ -212,15 +212,10 @@ def create_thesis(user_id: str, access_token: str, thesis_data: Dict[str, Any]) 
         response = client.table("theses").insert(data).execute()
         thesis = response.data[0] if response.data else None
         
-        # Create history entry
+        # Create history entry. Pinecone indexing is scheduled by the API
+        # route (BackgroundTasks) so CRUD never blocks on embed/network.
         if thesis:
             _create_thesis_history(user_id, access_token, thesis["id"], thesis, "created")
-            try:
-                from stocksense.memory.indexer import index_thesis
-
-                index_thesis(user_id, thesis)
-            except Exception as idx_err:
-                logger.warning(f"thesis memory index skipped: {idx_err}")
         
         return thesis
     except Exception as e:
@@ -266,7 +261,7 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
         )
         thesis = response.data[0] if response.data else None
 
-        # Create history entry
+        # Create history entry. Indexing is deferred by the API route.
         if thesis:
             _create_thesis_history(
                 user_id,
@@ -276,12 +271,6 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
                 change_type,
                 change_reason,
             )
-            try:
-                from stocksense.memory.indexer import index_thesis
-
-                index_thesis(user_id, thesis)
-            except Exception as idx_err:
-                logger.warning(f"thesis memory index skipped: {idx_err}")
 
         return thesis
     except Exception as e:

@@ -1,6 +1,6 @@
 # CatalystEdge — STATUS (single source of truth)
 
-**Last updated:** 2026-08-09  
+**Last updated:** 2026-08-10  
 **Repo:** https://github.com/vikram17036/catalystedge-living-thesis  
 **Local:** UI `localhost:3002` (or 3000) → API `127.0.0.1:8002`  
 **Prod:** https://catalystedge-living-thesis-pearl.vercel.app · https://catalystedge-backend.onrender.com  
@@ -86,5 +86,7 @@ npm run dev
 4. Start-new thesis: close preserves dependents; `/api/theses/start-new` is one fast Supabase round-trip; Pinecone index deferred via BackgroundTasks (does not block UI).  
 5. Agent routing: NL phrases for SMA/FOMC/historical momentum now select Strategy Lab, Event Study, and Analogs (plus Scenario); engines still calculate; LLM only synthesizes.  
 6. Agent synthesis: pass compact MEASURED_LAB_RESULTS (event means/rates, etc.) instead of truncating full observation tables mid-JSON.  
+7. Thesis assessment pack: “still make sense / reconsider” auto-selects market regime + analogs + scenario + FOMC event study + strategy lab; new `get_market_regime` tool (SMA20/50/200 state); synthesis requires partial-failure honesty; yfinance price fetch TTL-cached.  
+8. Start-new thesis UI: review editor shows analysis confidence and lets user customize before close+create.  
 
 *Maintain only this file for what’s done / what’s next.*

@@ -198,8 +198,10 @@ def test_plan_hero_and_followup():
     tools = plan["research_plan"]["research_tools_selected"]
     assert "find_analogs" in tools
     assert "run_scenario" in tools
-    assert "run_event_study" in plan["research_plan"]["not_selected"]
-    assert "run_backtest" in plan["research_plan"]["not_selected"]
+    assert "run_event_study" in tools
+    assert "run_backtest" in tools
+    assert "get_market_regime" in tools
+    assert plan["research_plan"]["not_selected"] == []
 
     follow = understand_request(
         {
@@ -252,6 +254,29 @@ def test_plan_multi_intent_routes_all_labs():
     assert "run_backtest" in selected
     assert "run_event_study" in selected
     assert "find_analogs" in selected
+    assert "get_market_regime" in selected
+
+
+def test_plan_evaluate_thesis_selects_full_pack():
+    plan = plan_research(
+        {
+            "user_message": "Does my NVDA thesis still make sense?",
+            "ticker": "NVDA",
+            "thesis": {"id": "t1", "ticker": "NVDA"},
+            "prior_specs": {},
+            "research_plan": {},
+            "trace": {},
+        }
+    )
+    selected = plan["research_plan"]["research_tools_selected"]
+    for t in (
+        "get_market_regime",
+        "find_analogs",
+        "run_scenario",
+        "run_event_study",
+        "run_backtest",
+    ):
+        assert t in selected
 
 
 def test_plan_upcoming_fomc_typo_still_selects_event_study():
@@ -274,7 +299,8 @@ def test_plan_upcoming_fomc_typo_still_selects_event_study():
     assert "find_analogs" in selected
     assert "run_scenario" in selected
     assert "run_event_study" in selected
-    assert "run_backtest" not in selected
+    assert "run_backtest" in selected
+    assert "get_market_regime" in selected
 
 
 def test_compact_event_study_brief_keeps_means():

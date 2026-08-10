@@ -14,6 +14,7 @@ const HERO =
 const FOLLOW = 'Make that a 12% drop.';
 
 const TOOL_LABELS: Record<string, string> = {
+  get_market_regime: 'Reading market regime (SMAs)',
   find_analogs: 'Finding historical analogs',
   run_scenario: 'Stress-testing scenario',
   run_event_study: 'Running event study',

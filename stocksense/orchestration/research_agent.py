@@ -27,9 +27,24 @@ logger = logging.getLogger(__name__)
 
 TRACE_VERSION = "research_trace_v1"
 
-RESEARCH_TOOLS = ("find_analogs", "run_scenario", "run_event_study", "run_backtest")
+RESEARCH_TOOLS = (
+    "get_market_regime",
+    "find_analogs",
+    "run_scenario",
+    "run_event_study",
+    "run_backtest",
+)
 SUPPORT_TOOLS = ("get_thesis", "retrieve_research_memory")
 WRITE_TOOLS = ("attach_evidence",)
+
+# Full thesis-assessment pack (objective → evidence, not keyword bag).
+_EVALUATE_THESIS_PACK = (
+    "get_market_regime",
+    "find_analogs",
+    "run_scenario",
+    "run_event_study",
+    "run_backtest",
+)
 
 
 @dataclass(frozen=True)
@@ -85,6 +100,25 @@ _EVENT_STUDY_RE = re.compile(
     r"upcoming\s+fed|next\s+fed|"
     r"rate\s+hike|rate\s+cut|interest\s+rate|"
     r"event\s+study"
+    r")\b",
+    re.I,
+)
+_REGIME_RE = re.compile(
+    r"\b("
+    r"regime|technical|price pattern|current (price|trend)|"
+    r"above (the )?sma|below (the )?sma|moving averages?"
+    r")\b",
+    re.I,
+)
+_EVALUATE_THESIS_RE = re.compile(
+    r"\b("
+    r"reconsider|"
+    r"still make sense|still holds?|still valid|"
+    r"thesis still|"
+    r"how (does |is )?(my )?thesis|"
+    r"evaluate (my )?(thesis|position)|"
+    r"does my thesis|"
+    r"thesis (assessment|stand|holding)"
     r")\b",
     re.I,
 )
@@ -308,6 +342,8 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
         and not _ANALOG_RE.search(text)
         and not _BACKTEST_RE.search(text)
         and not _EVENT_STUDY_RE.search(text)
+        and not _REGIME_RE.search(text)
+        and not _EVALUATE_THESIS_RE.search(text)
     )
 
     if follow_up_only:
@@ -316,6 +352,13 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
         if state.get("thesis") or state.get("ticker"):
             if "get_thesis" not in support:
                 support.append("get_thesis")
+
+        # Thesis assessment objective → full measured pack (not keyword menu).
+        if _EVALUATE_THESIS_RE.search(text) and (
+            state.get("thesis") or state.get("ticker")
+        ):
+            research.extend(list(_EVALUATE_THESIS_PACK))
+
         if _ANALOG_RE.search(text) or re.search(r"\bsimilar historical\b", text, re.I):
             research.append("find_analogs")
         if _SCENARIO_RE.search(text) or _PCT_RE.search(text):
@@ -325,9 +368,13 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
         # Upcoming FOMC still means: run historical Event Study (no live calendar).
         if _EVENT_STUDY_RE.search(text):
             research.append("run_event_study")
+        if _REGIME_RE.search(text):
+            research.append("get_market_regime")
         if not research:
-            if re.search(r"\b(reconsider|still make sense|thesis)\b", text, re.I):
-                research.extend(["find_analogs", "run_scenario"])
+            if re.search(r"\bthesis\b", text, re.I) and (
+                state.get("thesis") or state.get("ticker")
+            ):
+                research.extend(list(_EVALUATE_THESIS_PACK))
 
     # de-dupe
     def uniq(xs: List[str]) -> List[str]:
@@ -366,6 +413,7 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
 
 def execute_tools(state: ResearchState) -> Dict[str, Any]:
     from stocksense.research.analog_service import run_analog_search_request
+    from stocksense.research.market_regime_service import run_market_regime_request
     from stocksense.research.scenario_service import run_scenario_request
     from stocksense.research.service import run_event_study_request
     from stocksense.research.strategy_service import run_strategy_request
@@ -389,6 +437,23 @@ def execute_tools(state: ResearchState) -> Dict[str, Any]:
             or t.get("kill_criteria"),
             "status": t.get("status"),
         }
+
+    if "get_market_regime" in tools:
+        try:
+            out = run_market_regime_request(ticker)
+            results["get_market_regime"] = {
+                "spec": out.get("spec"),
+                "result": out.get("result"),
+                "interpretation": out.get("interpretation"),
+                "evidence_ledger": out.get("evidence_ledger"),
+            }
+            if out.get("spec"):
+                prior_specs["market_regime"] = out["spec"]
+        except Exception as e:
+            results["get_market_regime"] = {
+                "error": _safe_error_message(e),
+                "error_code": e.__class__.__name__,
+            }
 
     if "find_analogs" in tools:
         q = (
@@ -592,6 +657,29 @@ def _compact_tool_briefs(tools: Dict[str, Any]) -> Dict[str, Any]:
     elif an.get("error"):
         briefs["analogs"] = {"error": an.get("error")}
 
+    mr = tools.get("get_market_regime") or {}
+    if mr and not mr.get("error"):
+        r = mr.get("result") if isinstance(mr.get("result"), dict) else {}
+        briefs["market_regime"] = {
+            "interpretation": (mr.get("interpretation") or {}).get("summary"),
+            "as_of": r.get("as_of"),
+            "last_close": r.get("last_close"),
+            "sma20": r.get("sma20"),
+            "sma50": r.get("sma50"),
+            "sma200": r.get("sma200"),
+            "vs_sma20": r.get("vs_sma20"),
+            "vs_sma50": r.get("vs_sma50"),
+            "vs_sma200": r.get("vs_sma200"),
+            "sma20_vs_sma50": r.get("sma20_vs_sma50"),
+            "momentum_5d": r.get("momentum_5d"),
+            "momentum_20d": r.get("momentum_20d"),
+            "momentum_5d_pct": _pct(r.get("momentum_5d")),
+            "momentum_20d_pct": _pct(r.get("momentum_20d")),
+            "last_20_50_cross": r.get("last_20_50_cross"),
+        }
+    elif mr.get("error"):
+        briefs["market_regime"] = {"error": mr.get("error")}
+
     sc = tools.get("run_scenario") or {}
     if sc and not sc.get("error"):
         r = sc.get("result") if isinstance(sc.get("result"), dict) else {}
@@ -689,6 +777,7 @@ def validate_citations(state: ResearchState) -> Dict[str, Any]:
             }
         )
     for key, etype in (
+        ("get_market_regime", "market_regime"),
         ("find_analogs", "analog_search"),
         ("run_scenario", "scenario"),
         ("run_event_study", "event_study"),
@@ -749,6 +838,29 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
             f"**Active thesis** (conviction={thesis.get('conviction_level')}): "
             f"{thesis.get('thesis_summary')}"
         )
+    selected = list((plan or {}).get("research_tools_selected") or [])
+    failed = [
+        k
+        for k in selected
+        if isinstance(tools.get(k), dict) and tools[k].get("error")
+    ]
+    completed = [k for k in selected if k not in failed and tools.get(k)]
+    if selected:
+        lines.append(
+            f"**Labs run:** completed={completed or 'none'}; "
+            f"failed={failed or 'none'}; "
+            f"not_selected={(plan or {}).get('not_selected') or []}"
+        )
+    if briefs.get("market_regime") and not briefs["market_regime"].get("error"):
+        m = briefs["market_regime"]
+        lines.append(
+            f"**Market regime:** as_of={m.get('as_of')} last={m.get('last_close')} "
+            f"vs SMA20/50/200={m.get('vs_sma20')}/{m.get('vs_sma50')}/{m.get('vs_sma200')} "
+            f"20/50={m.get('sma20_vs_sma50')} "
+            f"mom5d={m.get('momentum_5d_pct')} mom20d={m.get('momentum_20d_pct')}"
+        )
+    elif briefs.get("market_regime", {}).get("error"):
+        lines.append(f"**Market regime error:** {briefs['market_regime']['error']}")
     if briefs.get("analogs") and not briefs["analogs"].get("error"):
         a = briefs["analogs"]
         lines.append(
@@ -825,13 +937,21 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
         prompt = (
             "You are CatalystEdge Research Agent. Ground EVERY quantitative claim in "
             "MEASURED_LAB_RESULTS below. Never invent numbers. "
-            "If a lab key is present with means/rates, you MUST quote those numbers — "
+            "If a lab key is present with means/rates/SMAs, you MUST quote those numbers — "
             "do not say the result was missing or not returned. "
             "Mark scenarios as hypothetical. "
             "Event Study is historical FOMC behavior only — do not invent the next "
             "meeting date; say you have no live FOMC calendar if asked about upcoming. "
             "Do NOT conflate analysis sentiment/confidence with thesis conviction_level — "
             "they are different fields.\n\n"
+            "Structure the answer as a thesis assessment:\n"
+            "1) What ran / failed / was not selected (be honest if incomplete).\n"
+            "2) Current market regime (SMAs / momentum) if present.\n"
+            "3) Historical analogs, FOMC event study, strategy backtest, scenario — "
+            "each only if measured.\n"
+            "4) Bottom line: which measured evidence supports, challenges, or leaves "
+            "the thesis unresolved. Never claim the thesis is fully validated if a "
+            "requested lab failed.\n\n"
             f"User: {state.get('user_message')}\n\n"
             f"MEASURED_LAB_RESULTS (authoritative):\n{measured}\n\n"
             f"Deterministic draft (you may polish, not contradict):\n{base}\n\n"
@@ -839,8 +959,10 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
             f"{(thesis or {}).get('conviction_level') if thesis else None}\n"
             f"Prior memory (context only):\n{json.dumps(mem_slim, default=str)}\n"
             f"Citations: {json.dumps(cite_ids)}\n"
-            f"Plan selected: {json.dumps((plan or {}).get('research_tools_selected') or [])}\n\n"
-            "Write a short grounded answer synthesizing only measured labs."
+            f"Plan selected: {json.dumps((plan or {}).get('research_tools_selected') or [])}\n"
+            f"Plan not_selected: {json.dumps((plan or {}).get('not_selected') or [])}\n"
+            f"Tool failures: {json.dumps(failed)}\n\n"
+            "Write a short grounded thesis assessment synthesizing only measured labs."
         )
         resp = llm.invoke(prompt)
         content = getattr(resp, "content", None) or str(resp)

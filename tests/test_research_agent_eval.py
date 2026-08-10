@@ -144,6 +144,35 @@ def agent_env(monkeypatch):
             ],
         }
 
+    def _mock_regime(ticker, *, lookback_calendar_days=420):
+        return {
+            "spec": {"ticker": ticker, "kind": "market_regime"},
+            "interpretation": {"summary": f"{ticker} regime mocked"},
+            "result": {
+                "ticker": ticker,
+                "as_of": "2026-08-07",
+                "last_close": 100.0,
+                "sma20": 98.0,
+                "sma50": 95.0,
+                "sma200": 80.0,
+                "vs_sma20": "above",
+                "vs_sma50": "above",
+                "vs_sma200": "above",
+                "sma20_vs_sma50": "bullish",
+                "momentum_5d": 0.01,
+                "momentum_20d": 0.05,
+                "engine_version": "market_regime_v1",
+            },
+            "evidence_ledger": [
+                {
+                    "id": "ev-regime-1",
+                    "type": "market_regime",
+                    "entity": ticker,
+                    "hypothetical": False,
+                }
+            ],
+        }
+
     monkeypatch.setattr(
         "stocksense.research.service.run_event_study_request",
         _mock_event,
@@ -151,6 +180,10 @@ def agent_env(monkeypatch):
     monkeypatch.setattr(
         "stocksense.research.strategy_service.run_strategy_request",
         _mock_strategy,
+    )
+    monkeypatch.setattr(
+        "stocksense.research.market_regime_service.run_market_regime_request",
+        _mock_regime,
     )
     monkeypatch.setattr(
         "stocksense.db.supabase_client.get_active_thesis_for_ticker",
@@ -226,7 +259,8 @@ def test_eval_hero_tool_selection(agent_env):
     out = _run(HERO)
     r = out["trace"]["research_tools_selected"]
     assert "find_analogs" in r and "run_scenario" in r
-    assert "run_event_study" not in r and "run_backtest" not in r
+    assert "run_event_study" in r and "run_backtest" in r
+    assert "get_market_regime" in r
     assert out["writes"] == 0
     assert out["trace"]["trace_version"] == "research_trace_v1"
 
@@ -241,6 +275,7 @@ def test_eval_multi_intent_selects_all_labs(agent_env):
     assert "run_backtest" in r
     assert "run_event_study" in r
     assert "find_analogs" in r
+    assert "get_market_regime" in r
     assert out["writes"] == 0
     assert not (out["trace"].get("tool_errors") or [])
 
@@ -378,9 +413,19 @@ def test_eval_scorecard(agent_env, monkeypatch):
         if ok:
             results["tool_selection"] += 1
 
-    # 1 hero
+    # 1 hero — full thesis assessment pack
     out = _run(HERO)
-    check_tools(out, ("find_analogs", "run_scenario"), ("run_event_study", "run_backtest"))
+    check_tools(
+        out,
+        (
+            "find_analogs",
+            "run_scenario",
+            "run_event_study",
+            "run_backtest",
+            "get_market_regime",
+        ),
+        (),
+    )
     results["write_cases"] += 1
     if out["writes"] != 0:
         results["unsafe_writes"] += 1

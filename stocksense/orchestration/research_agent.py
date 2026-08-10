@@ -80,13 +80,25 @@ _BACKTEST_RE = re.compile(
 )
 _EVENT_STUDY_RE = re.compile(
     r"\b("
-    r"fomc|fed(?:eral)? reserve|fed decision|"
-    r"rate hike|rate cut|interest rate|"
-    r"event study"
+    r"fomc|focmc|fomsc|"  # common typos
+    r"fed(?:eral)?\s+reserve|fed\s+decision|fed\s+meeting|"
+    r"upcoming\s+fed|next\s+fed|"
+    r"rate\s+hike|rate\s+cut|interest\s+rate|"
+    r"event\s+study"
     r")\b",
     re.I,
 )
 _PCT_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*%")
+
+
+def _normalize_routing_text(text: str) -> str:
+    """Light NL cleanup so typos still hit the right labs."""
+    t = text or ""
+    # Common FOMC misspellings from demos / fast typing
+    t = re.sub(r"\bfocmc\b", "fomc", t, flags=re.I)
+    t = re.sub(r"\bfomsc\b", "fomc", t, flags=re.I)
+    t = re.sub(r"\bfmoc\b", "fomc", t, flags=re.I)
+    return t
 
 
 class ResearchState(TypedDict, total=False):
@@ -282,7 +294,7 @@ def resolve_thesis(state: ResearchState) -> Dict[str, Any]:
 
 
 def plan_research(state: ResearchState) -> Dict[str, Any]:
-    text = state.get("user_message") or ""
+    text = _normalize_routing_text(state.get("user_message") or "")
     prior = state.get("prior_specs") or {}
     research: List[str] = []
     support: List[str] = list(
@@ -310,6 +322,7 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
             research.append("run_scenario")
         if _BACKTEST_RE.search(text):
             research.append("run_backtest")
+        # Upcoming FOMC still means: run historical Event Study (no live calendar).
         if _EVENT_STUDY_RE.search(text):
             research.append("run_event_study")
         if not research:

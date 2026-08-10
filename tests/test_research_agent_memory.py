@@ -254,6 +254,29 @@ def test_plan_multi_intent_routes_all_labs():
     assert "find_analogs" in selected
 
 
+def test_plan_upcoming_fomc_typo_still_selects_event_study():
+    plan = plan_research(
+        {
+            "user_message": (
+                "I'm reconsidering NVDA. Look at my previous research, find similar "
+                "historical periods, stress test another 8% drop, and tell me whether "
+                "my thesis still makes sense. an also think about any upcoming focmc "
+                "how it could effect"
+            ),
+            "ticker": "NVDA",
+            "thesis": {"id": "t1", "ticker": "NVDA"},
+            "prior_specs": {},
+            "research_plan": {},
+            "trace": {},
+        }
+    )
+    selected = plan["research_plan"]["research_tools_selected"]
+    assert "find_analogs" in selected
+    assert "run_scenario" in selected
+    assert "run_event_study" in selected
+    assert "run_backtest" not in selected
+
+
 def test_compact_event_study_brief_keeps_means():
     from stocksense.orchestration.research_agent import _compact_tool_briefs
 

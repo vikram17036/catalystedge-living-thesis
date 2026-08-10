@@ -59,10 +59,32 @@ _WRITE_RE = re.compile(
     re.I,
 )
 _ANALOG_RE = re.compile(
-    r"\b(analog|similar|historical period|look alike|same pattern)\b", re.I
+    r"\b("
+    r"analog|analogs|similar|"
+    r"historical period|historical periods|"
+    r"historical momentum|historical movement|"
+    r"look alike|same pattern|past periods|"
+    r"look(?:ed|s)? like"
+    r")\b",
+    re.I,
 )
 _SCENARIO_RE = re.compile(
     r"\b(scenario|stress|what[- ]?if|drop|crash|shock|down\s+\d)\b", re.I
+)
+_BACKTEST_RE = re.compile(
+    r"\b("
+    r"sma|moving average|crossover|cross[- ]?over|"
+    r"20\s*/\s*50|50\s*/\s*200|strategy lab|backtest"
+    r")\b",
+    re.I,
+)
+_EVENT_STUDY_RE = re.compile(
+    r"\b("
+    r"fomc|fed(?:eral)? reserve|fed decision|"
+    r"rate hike|rate cut|interest rate|"
+    r"event study"
+    r")\b",
+    re.I,
 )
 _PCT_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*%")
 
@@ -272,6 +294,8 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
         and _PCT_RE.search(text)
         and re.search(r"\b(make (it|that)|change|instead|now)\b", text, re.I)
         and not _ANALOG_RE.search(text)
+        and not _BACKTEST_RE.search(text)
+        and not _EVENT_STUDY_RE.search(text)
     )
 
     if follow_up_only:
@@ -284,6 +308,10 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
             research.append("find_analogs")
         if _SCENARIO_RE.search(text) or _PCT_RE.search(text):
             research.append("run_scenario")
+        if _BACKTEST_RE.search(text):
+            research.append("run_backtest")
+        if _EVENT_STUDY_RE.search(text):
+            research.append("run_event_study")
         if not research:
             if re.search(r"\b(reconsider|still make sense|thesis)\b", text, re.I):
                 research.extend(["find_analogs", "run_scenario"])
@@ -326,6 +354,8 @@ def plan_research(state: ResearchState) -> Dict[str, Any]:
 def execute_tools(state: ResearchState) -> Dict[str, Any]:
     from stocksense.research.analog_service import run_analog_search_request
     from stocksense.research.scenario_service import run_scenario_request
+    from stocksense.research.service import run_event_study_request
+    from stocksense.research.strategy_service import run_strategy_request
 
     auth = get_request_auth()
     plan = state.get("research_plan") or {}
@@ -350,7 +380,7 @@ def execute_tools(state: ResearchState) -> Dict[str, Any]:
     if "find_analogs" in tools:
         q = (
             text
-            if "analog" in text.lower() or "similar" in text.lower()
+            if _ANALOG_RE.search(text)
             else f"Find historical analogs for {ticker} similar return path periods"
         )
         try:
@@ -413,6 +443,66 @@ def execute_tools(state: ResearchState) -> Dict[str, Any]:
                 prior_specs["scenario"] = out["spec"]
         except Exception as e:
             results["run_scenario"] = {
+                "error": _safe_error_message(e),
+                "error_code": e.__class__.__name__,
+            }
+
+    if "run_backtest" in tools:
+        q = (
+            text
+            if _BACKTEST_RE.search(text) and re.search(r"\b\d+\s*/\s*\d+\b", text)
+            else f"Backtest a 20/50 SMA crossover on {ticker} since 2020."
+        )
+        try:
+            prior = None
+            if prior_specs.get("strategy"):
+                from stocksense.core.contracts import StrategySpec
+
+                try:
+                    prior = StrategySpec.model_validate(prior_specs["strategy"])
+                except Exception:
+                    prior = None
+            out = run_strategy_request(q, prior_spec=prior)
+            results["run_backtest"] = {
+                "spec": out.get("spec"),
+                "result": out.get("result"),
+                "interpretation": out.get("interpretation"),
+                "evidence_ledger": out.get("evidence_ledger"),
+            }
+            if out.get("spec"):
+                prior_specs["strategy"] = out["spec"]
+        except Exception as e:
+            results["run_backtest"] = {
+                "error": _safe_error_message(e),
+                "error_code": e.__class__.__name__,
+            }
+
+    if "run_event_study" in tools:
+        # Multi-intent sentences often only mention FOMC; keep a clean lab question.
+        q = f"What happens to {ticker} around FOMC decisions?"
+        try:
+            prior = None
+            if prior_specs.get("event_study"):
+                from stocksense.core.contracts import EventStudySpec
+
+                try:
+                    prior = EventStudySpec.model_validate(prior_specs["event_study"])
+                except Exception:
+                    prior = None
+            out = run_event_study_request(q, prior, use_llm=False)
+            results["run_event_study"] = {
+                "spec": out.get("spec"),
+                "result": out.get("result"),
+                "interpretation": out.get("interpretation"),
+                "evidence_ledger": out.get("evidence_ledger"),
+                "note": (
+                    "Historical FOMC behavior only — no live upcoming-meeting calendar."
+                ),
+            }
+            if out.get("spec"):
+                prior_specs["event_study"] = out["spec"]
+        except Exception as e:
+            results["run_event_study"] = {
                 "error": _safe_error_message(e),
                 "error_code": e.__class__.__name__,
             }
@@ -516,6 +606,8 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
     if tools.get("find_analogs") and not tools["find_analogs"].get("error"):
         interp = (tools["find_analogs"].get("interpretation") or {}).get("summary")
         lines.append(f"**Analogs:** {interp or 'completed'}")
+    elif tools.get("find_analogs", {}).get("error"):
+        lines.append(f"**Analogs error:** {tools['find_analogs']['error']}")
     if tools.get("run_scenario") and not tools["run_scenario"].get("error"):
         r = tools["run_scenario"].get("result") or {}
         lines.append(
@@ -525,6 +617,19 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
         lines.append("_This WHAT-IF does not modify the thesis._")
     elif tools.get("run_scenario", {}).get("error"):
         lines.append(f"**Scenario error:** {tools['run_scenario']['error']}")
+    if tools.get("run_backtest") and not tools["run_backtest"].get("error"):
+        interp = (tools["run_backtest"].get("interpretation") or {}).get("summary")
+        lines.append(f"**Strategy Lab (SMA):** {interp or 'completed'}")
+    elif tools.get("run_backtest", {}).get("error"):
+        lines.append(f"**Strategy Lab error:** {tools['run_backtest']['error']}")
+    if tools.get("run_event_study") and not tools["run_event_study"].get("error"):
+        interp = (tools["run_event_study"].get("interpretation") or {}).get("summary")
+        lines.append(f"**Event Study (FOMC, historical):** {interp or 'completed'}")
+        note = tools["run_event_study"].get("note")
+        if note:
+            lines.append(f"_{note}_")
+    elif tools.get("run_event_study", {}).get("error"):
+        lines.append(f"**Event Study error:** {tools['run_event_study']['error']}")
 
     cite_ids = [c.get("id") for c in (state.get("citations") or []) if c.get("id")]
     if cite_ids:
@@ -539,14 +644,16 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
         prompt = (
             "You are CatalystEdge Research Agent. Ground every claim in the "
             "provided tool results and hydrated memory. Never invent numbers. "
-            "Mark scenarios as hypothetical. Be concise.\n\n"
+            "Mark scenarios as hypothetical. Be concise. "
+            "Event Study is historical FOMC behavior only — do not invent the next "
+            "meeting date. If a lab was not in tool results, say it was not run.\n\n"
             f"User: {state.get('user_message')}\n\n"
             f"Plan: {json.dumps(plan, default=str)}\n"
             f"Thesis: {json.dumps(thesis, default=str)[:2000] if thesis else None}\n"
             f"Hydrated memory: {json.dumps(hydrated, default=str)[:3000]}\n"
-            f"Tool results: {json.dumps(_sanitize_tool_results(tools), default=str)[:4000]}\n"
+            f"Tool results: {json.dumps(_sanitize_tool_results(tools), default=str)[:6000]}\n"
             f"Citations: {json.dumps(cite_ids)}\n\n"
-            "Write a short grounded answer."
+            "Write a short grounded answer synthesizing only measured labs."
         )
         resp = llm.invoke(prompt)
         content = getattr(resp, "content", None) or str(resp)

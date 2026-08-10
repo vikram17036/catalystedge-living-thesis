@@ -231,3 +231,24 @@ def test_extract_ticker():
 def test_shock_from_text():
     assert math.isclose(_shock_from_text("another 8% drop"), -0.08, abs_tol=1e-9)
     assert math.isclose(_shock_from_text("Make that a 12% drop."), -0.12, abs_tol=1e-9)
+
+
+def test_plan_multi_intent_routes_all_labs():
+    plan = plan_research(
+        {
+            "user_message": (
+                "Reconsider NVDA thesis, shock test against 3% drop, "
+                "historical momentum, SMA crossover, and any FOMC upcoming"
+            ),
+            "ticker": "NVDA",
+            "thesis": {"id": "t1", "ticker": "NVDA"},
+            "prior_specs": {},
+            "research_plan": {},
+            "trace": {},
+        }
+    )
+    selected = plan["research_plan"]["research_tools_selected"]
+    assert "run_scenario" in selected
+    assert "run_backtest" in selected
+    assert "run_event_study" in selected
+    assert "find_analogs" in selected

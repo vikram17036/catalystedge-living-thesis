@@ -114,6 +114,44 @@ def agent_env(monkeypatch):
         "stocksense.research.scenario_service.run_scenario_request",
         _mock_scenario,
     )
+
+    def _mock_event(q, prior=None, use_llm=False):
+        return {
+            "spec": {"ticker": "NVDA", "event_source": "fomc"},
+            "interpretation": {"summary": "FOMC mean CAR mocked"},
+            "result": {
+                "n_events": 3,
+                "reproducibility": {"engine_version": "event_study_v1"},
+            },
+            "evidence_ledger": [
+                {"id": "ev-fomc-1", "type": "event_study", "hypothetical": False}
+            ],
+        }
+
+    def _mock_strategy(q, prior_spec=None, prior_result=None):
+        return {
+            "spec": {"ticker": "NVDA", "kind": "sma_crossover"},
+            "interpretation": {"summary": "20/50 SMA mocked"},
+            "result": {
+                "metrics": {"total_return": 0.1},
+                "reproducibility": {
+                    "engine_version": "strategy_lab_v1",
+                    "price_data_hash": "abc",
+                },
+            },
+            "evidence_ledger": [
+                {"id": "ev-bt-1", "type": "backtest", "hypothetical": False}
+            ],
+        }
+
+    monkeypatch.setattr(
+        "stocksense.research.service.run_event_study_request",
+        _mock_event,
+    )
+    monkeypatch.setattr(
+        "stocksense.research.strategy_service.run_strategy_request",
+        _mock_strategy,
+    )
     monkeypatch.setattr(
         "stocksense.db.supabase_client.get_active_thesis_for_ticker",
         lambda *a, **k: thesis,
@@ -191,6 +229,20 @@ def test_eval_hero_tool_selection(agent_env):
     assert "run_event_study" not in r and "run_backtest" not in r
     assert out["writes"] == 0
     assert out["trace"]["trace_version"] == "research_trace_v1"
+
+
+def test_eval_multi_intent_selects_all_labs(agent_env):
+    out = _run(
+        "Reconsider NVDA, stress a 3% drop, check SMA crossover and FOMC, "
+        "and historical momentum"
+    )
+    r = out["trace"]["research_tools_selected"]
+    assert "run_scenario" in r
+    assert "run_backtest" in r
+    assert "run_event_study" in r
+    assert "find_analogs" in r
+    assert out["writes"] == 0
+    assert not (out["trace"].get("tool_errors") or [])
 
 
 def test_eval_irrelevant_tools_avoided_on_scenario_only(agent_env):

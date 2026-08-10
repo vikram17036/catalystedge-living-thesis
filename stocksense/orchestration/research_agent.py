@@ -523,6 +523,135 @@ def hydrate_memory_sources(state: ResearchState) -> Dict[str, Any]:
     return {"hydrated_context": hydrated}
 
 
+def _pct(v: Any) -> str:
+    try:
+        if v is None:
+            return "n/a"
+        return f"{float(v) * 100:.2f}%"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _compact_tool_briefs(tools: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Dense measured facts for synthesis — never full observation tables.
+    Keeps Gemini grounded when multi-lab JSON would otherwise truncate.
+    """
+    briefs: Dict[str, Any] = {}
+
+    gt = tools.get("get_thesis") or {}
+    if gt and not gt.get("error"):
+        briefs["thesis"] = {
+            "id": gt.get("id"),
+            "ticker": gt.get("ticker"),
+            "status": gt.get("status"),
+            "conviction_level": gt.get("conviction_level"),
+            "summary": (gt.get("thesis_summary") or "")[:400],
+            "kill_criteria": gt.get("kill_criteria"),
+        }
+
+    an = tools.get("find_analogs") or {}
+    if an and not an.get("error"):
+        r = an.get("result") if isinstance(an.get("result"), dict) else {}
+        matches = r.get("matches") if isinstance(r.get("matches"), list) else []
+        briefs["analogs"] = {
+            "interpretation": (an.get("interpretation") or {}).get("summary"),
+            "matches_returned": r.get("matches_returned") or len(matches),
+            "forward_mean": r.get("forward_mean"),
+            "forward_median": r.get("forward_median"),
+            "positive_hit_rate": r.get("positive_hit_rate"),
+            "lookback": (an.get("spec") or {}).get("lookback")
+            if isinstance(an.get("spec"), dict)
+            else None,
+            "post_window": (an.get("spec") or {}).get("post_window")
+            if isinstance(an.get("spec"), dict)
+            else None,
+            "top_endpoints": [
+                {
+                    "end": m.get("lookback_end") or m.get("endpoint"),
+                    "distance": m.get("distance"),
+                    "forward_return": m.get("forward_return"),
+                }
+                for m in matches[:5]
+                if isinstance(m, dict)
+            ],
+        }
+    elif an.get("error"):
+        briefs["analogs"] = {"error": an.get("error")}
+
+    sc = tools.get("run_scenario") or {}
+    if sc and not sc.get("error"):
+        r = sc.get("result") if isinstance(sc.get("result"), dict) else {}
+        spec = sc.get("spec") if isinstance(sc.get("spec"), dict) else {}
+        briefs["scenario"] = {
+            "interpretation": (sc.get("interpretation") or {}).get("summary"),
+            "shock_metric": spec.get("shock_metric") or "one_day_return",
+            "shock_value": spec.get("shock_value"),
+            "criteria_triggered": r.get("criteria_triggered"),
+            "criteria_evaluated": r.get("criteria_evaluated"),
+            "material": r.get("material"),
+            "triggered_labels": [
+                c.get("label")
+                for c in (r.get("triggered_criteria") or [])
+                if isinstance(c, dict)
+            ][:5],
+            "disclaimer": sc.get("disclaimer"),
+        }
+    elif sc.get("error"):
+        briefs["scenario"] = {"error": sc.get("error")}
+
+    bt = tools.get("run_backtest") or {}
+    if bt and not bt.get("error"):
+        r = bt.get("result") if isinstance(bt.get("result"), dict) else {}
+        metrics = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+        briefs["strategy_lab"] = {
+            "interpretation": (bt.get("interpretation") or {}).get("summary"),
+            "total_return": metrics.get("total_return"),
+            "max_drawdown": metrics.get("max_drawdown"),
+            "hit_rate": metrics.get("hit_rate"),
+            "n_trades": metrics.get("n_trades"),
+        }
+    elif bt.get("error"):
+        briefs["strategy_lab"] = {"error": bt.get("error")}
+
+    es = tools.get("run_event_study") or {}
+    if es and not es.get("error"):
+        r = es.get("result") if isinstance(es.get("result"), dict) else {}
+        spec = es.get("spec") if isinstance(es.get("spec"), dict) else {}
+        pre = r.get("pre_stats") if isinstance(r.get("pre_stats"), dict) else {}
+        event = r.get("event_stats") if isinstance(r.get("event_stats"), dict) else {}
+        post = r.get("post_stats") if isinstance(r.get("post_stats"), dict) else {}
+        briefs["event_study"] = {
+            "interpretation": (es.get("interpretation") or {}).get("summary"),
+            "note": es.get("note"),
+            "ticker": spec.get("ticker"),
+            "event_source": spec.get("event_source") or "fomc",
+            "pre_window": spec.get("pre_window"),
+            "post_window": spec.get("post_window"),
+            "calendar_events": r.get("calendar_events"),
+            "eligible_events": r.get("eligible_events"),
+            "events_analyzed": r.get("events_analyzed"),
+            "pre_mean": pre.get("mean"),
+            "pre_median": pre.get("median"),
+            "pre_positive_rate": pre.get("positive_rate"),
+            "event_mean": event.get("mean"),
+            "event_median": event.get("median"),
+            "event_positive_rate": event.get("positive_rate"),
+            "post_mean": post.get("mean"),
+            "post_median": post.get("median"),
+            "post_positive_rate": post.get("positive_rate"),
+            # Human-readable mirrors so the model can't claim "no numbers"
+            "pre_mean_pct": _pct(pre.get("mean")),
+            "event_mean_pct": _pct(event.get("mean")),
+            "post_mean_pct": _pct(post.get("mean")),
+            "post_positive_rate_pct": _pct(post.get("positive_rate")),
+        }
+    elif es.get("error"):
+        briefs["event_study"] = {"error": es.get("error")}
+
+    return briefs
+
+
 def validate_citations(state: ResearchState) -> Dict[str, Any]:
     citations: List[Dict[str, Any]] = []
     for h in state.get("hydrated_context") or []:
@@ -588,6 +717,7 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
     hydrated = state.get("hydrated_context") or []
     thesis = state.get("thesis")
     plan = state.get("research_plan") or {}
+    briefs = _compact_tool_briefs(tools)
 
     lines = []
     ticker = state.get("ticker") or "?"
@@ -602,57 +732,101 @@ def synthesize(state: ResearchState) -> Dict[str, Any]:
             "(hydrated from Supabase)."
         )
     if thesis:
-        lines.append(f"**Active thesis:** {thesis.get('thesis_summary')}")
-    if tools.get("find_analogs") and not tools["find_analogs"].get("error"):
-        interp = (tools["find_analogs"].get("interpretation") or {}).get("summary")
-        lines.append(f"**Analogs:** {interp or 'completed'}")
-    elif tools.get("find_analogs", {}).get("error"):
-        lines.append(f"**Analogs error:** {tools['find_analogs']['error']}")
-    if tools.get("run_scenario") and not tools["run_scenario"].get("error"):
-        r = tools["run_scenario"].get("result") or {}
         lines.append(
-            f"**Scenario (hypothetical):** triggered={r.get('criteria_triggered')}, "
-            f"evaluated={r.get('criteria_evaluated')}, material={r.get('material')}"
+            f"**Active thesis** (conviction={thesis.get('conviction_level')}): "
+            f"{thesis.get('thesis_summary')}"
+        )
+    if briefs.get("analogs") and not briefs["analogs"].get("error"):
+        a = briefs["analogs"]
+        lines.append(
+            f"**Analogs:** {a.get('interpretation') or 'completed'} "
+            f"(mean={_pct(a.get('forward_mean'))}, "
+            f"median={_pct(a.get('forward_median'))}, "
+            f"hit={_pct(a.get('positive_hit_rate'))})"
+        )
+    elif briefs.get("analogs", {}).get("error"):
+        lines.append(f"**Analogs error:** {briefs['analogs']['error']}")
+    if briefs.get("scenario") and not briefs["scenario"].get("error"):
+        s = briefs["scenario"]
+        lines.append(
+            f"**Scenario (hypothetical):** shock={s.get('shock_value')}, "
+            f"triggered={s.get('criteria_triggered')}, "
+            f"evaluated={s.get('criteria_evaluated')}, material={s.get('material')}"
         )
         lines.append("_This WHAT-IF does not modify the thesis._")
-    elif tools.get("run_scenario", {}).get("error"):
-        lines.append(f"**Scenario error:** {tools['run_scenario']['error']}")
-    if tools.get("run_backtest") and not tools["run_backtest"].get("error"):
-        interp = (tools["run_backtest"].get("interpretation") or {}).get("summary")
-        lines.append(f"**Strategy Lab (SMA):** {interp or 'completed'}")
-    elif tools.get("run_backtest", {}).get("error"):
-        lines.append(f"**Strategy Lab error:** {tools['run_backtest']['error']}")
-    if tools.get("run_event_study") and not tools["run_event_study"].get("error"):
-        interp = (tools["run_event_study"].get("interpretation") or {}).get("summary")
-        lines.append(f"**Event Study (FOMC, historical):** {interp or 'completed'}")
-        note = tools["run_event_study"].get("note")
-        if note:
-            lines.append(f"_{note}_")
-    elif tools.get("run_event_study", {}).get("error"):
-        lines.append(f"**Event Study error:** {tools['run_event_study']['error']}")
+    elif briefs.get("scenario", {}).get("error"):
+        lines.append(f"**Scenario error:** {briefs['scenario']['error']}")
+    if briefs.get("strategy_lab") and not briefs["strategy_lab"].get("error"):
+        lines.append(
+            f"**Strategy Lab (SMA):** "
+            f"{briefs['strategy_lab'].get('interpretation') or 'completed'}"
+        )
+    elif briefs.get("strategy_lab", {}).get("error"):
+        lines.append(f"**Strategy Lab error:** {briefs['strategy_lab']['error']}")
+    if briefs.get("event_study") and not briefs["event_study"].get("error"):
+        e = briefs["event_study"]
+        lines.append(
+            f"**Event Study (FOMC, historical):** "
+            f"analyzed {e.get('events_analyzed')}/{e.get('eligible_events')} · "
+            f"pre mean {e.get('pre_mean_pct')} · "
+            f"event mean {e.get('event_mean_pct')} · "
+            f"post mean {e.get('post_mean_pct')} · "
+            f"post positive {e.get('post_positive_rate_pct')}"
+        )
+        if e.get("interpretation"):
+            lines.append(f"_Engine summary:_ {e.get('interpretation')}")
+        if e.get("note"):
+            lines.append(f"_{e.get('note')}_")
+    elif briefs.get("event_study", {}).get("error"):
+        lines.append(f"**Event Study error:** {briefs['event_study']['error']}")
 
     cite_ids = [c.get("id") for c in (state.get("citations") or []) if c.get("id")]
     if cite_ids:
         lines.append("**Citations:** " + ", ".join(str(x) for x in cite_ids))
 
     base = "\n\n".join(lines)
+    measured = json.dumps(briefs, default=str)
+
+    # Slim memory for prompt (ids + short text only)
+    mem_slim = []
+    for h in hydrated[:6]:
+        can = h.get("canonical") if isinstance(h.get("canonical"), dict) else {}
+        mem_slim.append(
+            {
+                "citation_id": h.get("citation_id"),
+                "source_type": h.get("source_type"),
+                "hypothetical": h.get("hypothetical"),
+                "snippet": str(
+                    can.get("thesis_summary")
+                    or can.get("summary")
+                    or h.get("chunk_text")
+                    or ""
+                )[:220],
+            }
+        )
 
     try:
         llm = get_chat_llm(
             model="gemini-3.1-flash-lite", temperature=0.2, max_output_tokens=1024
         )
         prompt = (
-            "You are CatalystEdge Research Agent. Ground every claim in the "
-            "provided tool results and hydrated memory. Never invent numbers. "
-            "Mark scenarios as hypothetical. Be concise. "
+            "You are CatalystEdge Research Agent. Ground EVERY quantitative claim in "
+            "MEASURED_LAB_RESULTS below. Never invent numbers. "
+            "If a lab key is present with means/rates, you MUST quote those numbers — "
+            "do not say the result was missing or not returned. "
+            "Mark scenarios as hypothetical. "
             "Event Study is historical FOMC behavior only — do not invent the next "
-            "meeting date. If a lab was not in tool results, say it was not run.\n\n"
+            "meeting date; say you have no live FOMC calendar if asked about upcoming. "
+            "Do NOT conflate analysis sentiment/confidence with thesis conviction_level — "
+            "they are different fields.\n\n"
             f"User: {state.get('user_message')}\n\n"
-            f"Plan: {json.dumps(plan, default=str)}\n"
-            f"Thesis: {json.dumps(thesis, default=str)[:2000] if thesis else None}\n"
-            f"Hydrated memory: {json.dumps(hydrated, default=str)[:3000]}\n"
-            f"Tool results: {json.dumps(_sanitize_tool_results(tools), default=str)[:6000]}\n"
-            f"Citations: {json.dumps(cite_ids)}\n\n"
+            f"MEASURED_LAB_RESULTS (authoritative):\n{measured}\n\n"
+            f"Deterministic draft (you may polish, not contradict):\n{base}\n\n"
+            f"Thesis conviction_level: "
+            f"{(thesis or {}).get('conviction_level') if thesis else None}\n"
+            f"Prior memory (context only):\n{json.dumps(mem_slim, default=str)}\n"
+            f"Citations: {json.dumps(cite_ids)}\n"
+            f"Plan selected: {json.dumps((plan or {}).get('research_tools_selected') or [])}\n\n"
             "Write a short grounded answer synthesizing only measured labs."
         )
         resp = llm.invoke(prompt)
@@ -780,12 +954,26 @@ def _timed_node(name: str, fn: Callable[[ResearchState], Dict[str, Any]]):
 
 
 def _sanitize_tool_results(tool_results: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop bulky fields from API/trace payloads (observations tables, ledgers)."""
     clean: Dict[str, Any] = {}
     for k, v in (tool_results or {}).items():
         if not isinstance(v, dict):
             clean[k] = v
             continue
-        clean[k] = {kk: vv for kk, vv in v.items() if kk != "evidence_ledger"}
+        block = {kk: vv for kk, vv in v.items() if kk != "evidence_ledger"}
+        result = block.get("result")
+        if isinstance(result, dict) and "observations" in result:
+            slim = dict(result)
+            slim.pop("observations", None)
+            slim.pop("exclusions", None)
+            block["result"] = slim
+        if isinstance(result, dict) and "matches" in result:
+            slim = dict(block["result"] if isinstance(block.get("result"), dict) else result)
+            matches = slim.get("matches")
+            if isinstance(matches, list) and len(matches) > 5:
+                slim["matches"] = matches[:5]
+            block["result"] = slim
+        clean[k] = block
     return clean
 
 

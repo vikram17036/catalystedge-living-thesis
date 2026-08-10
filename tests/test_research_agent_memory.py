@@ -252,3 +252,36 @@ def test_plan_multi_intent_routes_all_labs():
     assert "run_backtest" in selected
     assert "run_event_study" in selected
     assert "find_analogs" in selected
+
+
+def test_compact_event_study_brief_keeps_means():
+    from stocksense.orchestration.research_agent import _compact_tool_briefs
+
+    briefs = _compact_tool_briefs(
+        {
+            "run_event_study": {
+                "note": "Historical FOMC behavior only",
+                "interpretation": {"summary": "NVDA around FOMC analyzed 64"},
+                "spec": {
+                    "ticker": "NVDA",
+                    "event_source": "fomc",
+                    "pre_window": 1,
+                    "post_window": 1,
+                },
+                "result": {
+                    "calendar_events": 80,
+                    "eligible_events": 70,
+                    "events_analyzed": 64,
+                    "pre_stats": {"mean": 0.01, "median": 0.009, "positive_rate": 0.55},
+                    "event_stats": {"mean": -0.002, "median": 0.0, "positive_rate": 0.48},
+                    "post_stats": {"mean": 0.004, "median": 0.003, "positive_rate": 0.52},
+                    "observations": [{"event_date": "2020-01-01"}] * 64,
+                },
+            }
+        }
+    )
+    es = briefs["event_study"]
+    assert es["events_analyzed"] == 64
+    assert es["post_mean"] == 0.004
+    assert "0.40%" in es["post_mean_pct"] or es["post_mean_pct"].endswith("%")
+    assert "observations" not in es

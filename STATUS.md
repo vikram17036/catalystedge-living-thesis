@@ -85,5 +85,6 @@ npm run dev
 3. Demo UI polish: grey hierarchy, human evidence cards, Agent loading, chip fill-only.  
 4. Start-new thesis: close preserves dependents; `/api/theses/start-new` is one fast Supabase round-trip; Pinecone index deferred via BackgroundTasks (does not block UI).  
 5. Agent routing: NL phrases for SMA/FOMC/historical momentum now select Strategy Lab, Event Study, and Analogs (plus Scenario); engines still calculate; LLM only synthesizes.  
+6. Agent synthesis: pass compact MEASURED_LAB_RESULTS (event means/rates, etc.) instead of truncating full observation tables mid-JSON.  
 
 *Maintain only this file for what’s done / what’s next.*

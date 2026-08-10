@@ -38,22 +38,40 @@ In Supabase SQL editor (your project), run migrations in order under `supabase/`
 | React frontend | **Vercel** | Static Vite build |
 | FastAPI + scheduler | **Render** (see `render.yaml`) | Long-running API + Watchman job; not a fit for Vercel serverless as-is |
 
-### Frontend → Vercel
-
-1. Push this repo to GitHub (`vikram17036`).
-2. Vercel → New Project → root directory = `frontend`.
-3. Env vars in Vercel:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_API_URL` = `https://<your-render-service>.onrender.com`
-4. Deploy.
-
 ### Backend → Render
 
-1. New Web Service from `render.yaml`, or Blueprint.
-2. Set the same secrets as `.env` (Google, NewsAPI, Supabase).
-3. Set `CORS_ORIGINS` to your Vercel URL (comma-separated if multiple).
+**One-click Blueprint** (after repo is on GitHub):
 
+https://dashboard.render.com/blueprint/new?repo=https%3A%2F%2Fgithub.com%2Fvikram17036%2Fcatalystedge-living-thesis
+
+1. Connect the `vikram17036/catalystedge-living-thesis` repo (or open the link above).
+2. Service name should be `catalystedge-backend` from `render.yaml`.
+3. Set secrets (same as root `.env`):
+   - `GOOGLE_API_KEY`, `NEWSAPI_KEY`
+   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (Legacy JWT), `SUPABASE_SERVICE_KEY`
+   - `CORS_ORIGINS` — leave `*` until Vercel URL exists, then set to the Vercel origin
+4. Deploy → copy the public URL (e.g. `https://catalystedge-backend.onrender.com`).
+
+Free-tier note: no persistent disk in `render.yaml` (ephemeral `/tmp` cache only). Cold starts are OK for smoke; do not rewrite the app to chase free-tier quirks.
+
+### Frontend → Vercel
+
+1. Vercel → New Project → import `vikram17036/catalystedge-living-thesis`.
+2. **Root Directory** = `frontend` (required).
+3. Env vars:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY` (same Legacy JWT anon key)
+   - `VITE_API_URL` = Render backend URL from above (**no trailing slash**)
+4. Deploy.
+
+### Supabase Auth (required for live login)
+
+In your Supabase project → Authentication → URL configuration:
+
+- **Site URL** = your Vercel URL
+- **Redirect URLs** include `https://<vercel-app>.vercel.app/**` and `http://localhost:3000/**`
+
+Without this, production login fails even if the API is healthy.
 ### Smoke check after deploy (exact Phase 1 regression)
 
 Fresh browser session on **public** URLs only:

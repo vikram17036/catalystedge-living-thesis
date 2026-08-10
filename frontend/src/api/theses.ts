@@ -21,10 +21,29 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 /** Surface FastAPI `detail` when present. */
 export function thesisApiErrorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
-    const ax = err as AxiosError<{ detail?: string | { msg?: string }[] }>;
+    const ax = err as AxiosError<{ detail?: unknown }>;
     const detail = ax.response?.data?.detail;
     if (typeof detail === 'string' && detail.trim()) return detail;
-    if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+    if (Array.isArray(detail) && detail.length) {
+      const parts = detail.map((d) => {
+        if (!d || typeof d !== 'object') return String(d);
+        const item = d as { loc?: unknown[]; msg?: string; message?: string };
+        const loc = Array.isArray(item.loc)
+          ? item.loc.filter((x) => x !== 'body').join('.')
+          : '';
+        const msg = item.msg || item.message || JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      });
+      return parts.join('; ');
+    }
+    if (detail && typeof detail === 'object') {
+      try {
+        return JSON.stringify(detail);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (ax.code === 'ECONNABORTED') return 'Request timed out — try again';
     if (ax.message) return ax.message;
   }
   if (err instanceof Error && err.message) return err.message;
@@ -121,9 +140,9 @@ export function useCreateThesis() {
 }
 
 /**
- * Close active theses for ticker and create a replacement in one request.
- * Falls back to PATCH exit + POST create if /start-new is unavailable.
- * Pinecone indexing is deferred on the server.
+ * Close active theses for ticker and create a replacement.
+ * Uses sequential PATCH exit + POST create as the primary path so each step
+ * surfaces a clear error. Tries /start-new first only as a fast path.
  */
 export function useStartNewThesis() {
   const queryClient = useQueryClient();
@@ -133,58 +152,62 @@ export function useStartNewThesis() {
       thesis: CreateThesisRequest & { change_reason?: string }
     ) => {
       const client = await createThesisClient();
-      // Keep payload light — large ledgers have caused silent create failures.
       const slimEvidence = Array.isArray(thesis.origin_evidence)
-        ? thesis.origin_evidence.slice(0, 40)
+        ? thesis.origin_evidence.slice(0, 25)
         : undefined;
-      const body = {
+      const originId =
+        typeof thesis.origin_analysis_id === 'number' &&
+        Number.isFinite(thesis.origin_analysis_id)
+          ? Math.trunc(thesis.origin_analysis_id)
+          : undefined;
+      const body: CreateThesisRequest & { change_reason?: string } = {
         ...thesis,
+        origin_analysis_id: originId,
         origin_evidence: slimEvidence,
       };
-      try {
-        const { data } = await client.post<Thesis>('/api/theses/start-new', body);
-        return data;
-      } catch (err) {
-        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-        // Fallback for older backends or transient routing issues
-        if (status && status !== 404 && status !== 405 && status !== 502 && status !== 503) {
-          throw err;
-        }
-        const list = await client.get<ThesesResponse>('/api/theses', {
-          params: { ticker: body.ticker.toUpperCase() },
+      const reason =
+        body.change_reason ||
+        'Closed to start a new active thesis from the latest analysis';
+
+      // Prefer sequential exit+create — reliable across deploys and easier to debug.
+      const list = await client.get<ThesesResponse>('/api/theses', {
+        params: { ticker: body.ticker.toUpperCase() },
+      });
+      const actives = (list.data.theses || []).filter((t) => {
+        const s = (t.status || 'active').toLowerCase();
+        return s === 'active' || s === 'validated';
+      });
+      for (const t of actives) {
+        await client.patch(`/api/theses/${t.id}`, {
+          status: 'exited',
+          change_reason: reason,
         });
-        const actives = (list.data.theses || []).filter((t) => {
-          const s = (t.status || 'active').toLowerCase();
-          return s === 'active' || s === 'validated';
-        });
-        for (const t of actives) {
-          await client.patch(`/api/theses/${t.id}`, {
-            status: 'exited',
-            change_reason:
-              body.change_reason ||
-              'Closed to start a new active thesis from the latest analysis',
-          });
-        }
-        const { change_reason: _cr, ...createBody } = body;
-        const { data } = await client.post<Thesis>('/api/theses', createBody);
-        return data;
       }
+      const { change_reason: _cr, ...createBody } = body;
+      const { data } = await client.post<Thesis>('/api/theses', createBody);
+      if (!data?.id) {
+        throw new Error('Create returned empty thesis');
+      }
+      return data;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(thesisKeys.byTicker(data.ticker), (prev: ThesesResponse | undefined) => {
-        const prior = prev?.theses ?? [];
-        const exited = prior.map((t) =>
-          t.id !== data.id &&
-          ((t.status || 'active') === 'active' || t.status === 'validated')
-            ? { ...t, status: 'exited' as const }
-            : t
-        );
-        const withoutDup = exited.filter((t) => t.id !== data.id);
-        return {
-          theses: [data, ...withoutDup],
-          count: withoutDup.length + 1,
-        };
-      });
+      queryClient.setQueryData(
+        thesisKeys.byTicker(data.ticker),
+        (prev: ThesesResponse | undefined) => {
+          const prior = prev?.theses ?? [];
+          const exited = prior.map((t) =>
+            t.id !== data.id &&
+            ((t.status || 'active') === 'active' || t.status === 'validated')
+              ? { ...t, status: 'exited' as const }
+              : t
+          );
+          const withoutDup = exited.filter((t) => t.id !== data.id);
+          return {
+            theses: [data, ...withoutDup],
+            count: withoutDup.length + 1,
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: thesisKeys.all });
       queryClient.invalidateQueries({ queryKey: thesisKeys.byTicker(data.ticker) });
     },

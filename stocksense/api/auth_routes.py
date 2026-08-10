@@ -6,7 +6,7 @@ Stage 3: User Belief System
 
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from stocksense.db.supabase_client import (
     verify_user_token,
@@ -89,13 +89,23 @@ class ThesisCreate(BaseModel):
     time_horizon: str = "medium"  # short, medium, long
     thesis_type: str = "growth"  # growth, value, income, turnaround, special_situation
     position_id: Optional[str] = None
-    # Stage 4 / Phase 1: Analysis-Thesis Linkage
+    # Coerce bad ids to None — never 422 the whole start-new/create on id shape.
     origin_analysis_id: Optional[int] = Field(None, description="Supabase cache ID of the analysis that informed this thesis")
     origin_analysis_snapshot: Optional[dict] = Field(None, description="Snapshot of key analysis metrics at thesis creation")
     origin_evidence: Optional[List[dict]] = Field(None, description="Frozen Evidence ledger at thesis creation")
     structured_kill_criteria: Optional[List[dict]] = Field(
         None, description="Typed kill criteria (deterministic + qualitative)"
     )
+
+    @field_validator("origin_analysis_id", mode="before")
+    @classmethod
+    def _coerce_origin_analysis_id(cls, v: Any) -> Optional[int]:
+        if v is None or v == "":
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
 
 
 class ThesisUpdate(BaseModel):

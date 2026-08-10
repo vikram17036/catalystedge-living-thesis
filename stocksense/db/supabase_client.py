@@ -274,6 +274,10 @@ def update_thesis(user_id: str, access_token: str, thesis_id: str, updates: Dict
             .execute()
         )
         thesis = response.data[0] if response.data else None
+        if not thesis:
+            raise RuntimeError(
+                f"Thesis update returned no row (id={thesis_id}). Check RLS / ownership."
+            )
 
         # Create history entry. Indexing is deferred by the API route.
         if thesis:

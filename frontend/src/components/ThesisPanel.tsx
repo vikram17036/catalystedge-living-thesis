@@ -113,6 +113,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   const [diffResult, setDiffResult] = useState<ThesisComparison | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startNewError, setStartNewError] = useState<string | null>(null);
+  const [startNewSuccess, setStartNewSuccess] = useState<string | null>(null);
 
   const snapshot = useMemo(() => buildSnapshot(analysis), [analysis]);
   const evidenceLedger = analysis.evidence_ledger as
@@ -221,6 +222,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
 
   const handleStartNewThesis = async () => {
     setStartNewError(null);
+    setStartNewSuccess(null);
     setError(null);
     if (!user) {
       setStartNewError('Sign in to start a new thesis');
@@ -230,6 +232,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       setStartNewError('No active thesis to close');
       return;
     }
+    const previousId = activeThesis.id;
     try {
       const sentiment = analysis.overall_sentiment || 'Unknown';
       const conf = analysis.overall_confidence ?? 0;
@@ -238,12 +241,17 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
           ? analysis.summary!.trim()
           : `${ticker} living thesis: current catalyst read is ${sentiment} at ${Math.round(conf * 100)}% confidence.`;
 
+      const originId =
+        typeof analysis.id === 'number' && Number.isFinite(analysis.id)
+          ? Math.trunc(analysis.id)
+          : undefined;
+
       const created = await startNewThesis.mutateAsync({
         ticker: ticker.toUpperCase(),
         thesis_summary: summary.slice(0, 2000),
         conviction_level: conf >= 0.75 ? 'high' : conf >= 0.45 ? 'medium' : 'low',
         kill_criteria: ['One-day drop greater than 5%'],
-        origin_analysis_id: analysis.id,
+        origin_analysis_id: originId,
         origin_analysis_snapshot: snapshot,
         origin_evidence: Array.isArray(evidenceLedger)
           ? (evidenceLedger as Record<string, unknown>[]).slice(0, 25)
@@ -265,10 +273,23 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       setConfirmNewOpen(false);
       setStartNewError(null);
       setError(null);
-      await refetch();
+      const refreshed = await refetch();
+      const newest = (refreshed.data?.theses || []).find((t: Thesis) =>
+        isActiveStatus(t.status)
+      );
       if (!created?.id) {
         setError('New thesis create returned empty response — refresh and check Theses.');
+        return;
       }
+      if (newest?.id === previousId) {
+        setError(
+          `Close/create may have failed — still seeing thesis ${previousId.slice(0, 8)}… Refresh the page.`
+        );
+        return;
+      }
+      setStartNewSuccess(
+        `New active thesis created (${created.id.slice(0, 8)}…). Previous thesis closed and kept as history.`
+      );
     } catch (e) {
       const msg = thesisApiErrorMessage(e, 'Failed to start a new thesis');
       setStartNewError(msg);
@@ -474,6 +495,12 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               </Button>
             </div>
           </div>
+        )}
+
+        {startNewSuccess && (
+          <p className="rounded-md border border-bull/40 bg-bull/10 px-3 py-2 text-sm text-bull">
+            {startNewSuccess}
+          </p>
         )}
 
         {error && <p className="text-sm text-bear">{error}</p>}

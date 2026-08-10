@@ -1,6 +1,6 @@
 /**
  * ThesisPanel — Propose/Create thesis + Replay + Diff + Evidence Why
- * Phase 1 Living Thesis DoD — content presentation (readable cards)
+ * Active thesis first; deliberate “Start new thesis” closes old → creates new.
  */
 
 import { useMemo, useState } from 'react';
@@ -13,11 +13,17 @@ import {
   useThesisComparison,
   useReplayThesis,
   useProposeThesisFromAnalysis,
+  useUpdateThesis,
 } from '../api/theses';
 import ThesisDiffView from './ThesisDiffView';
 import ThesisEditor from './ThesisEditor';
 import type { AnalysisData } from '../types/api';
-import type { AnalysisSnapshot, CreateThesisRequest, ThesisComparison } from '../types/thesis';
+import type {
+  AnalysisSnapshot,
+  CreateThesisRequest,
+  Thesis,
+  ThesisComparison,
+} from '../types/thesis';
 import { cn } from '../utils/cn';
 import {
   formatAttachedEvidenceCard,
@@ -38,6 +44,23 @@ function buildSnapshot(analysis: AnalysisData): AnalysisSnapshot {
     key_themes: (analysis.key_themes || []).map((t) => t.theme),
     timestamp: analysis.timestamp || new Date().toISOString(),
   };
+}
+
+function isActiveStatus(status?: string) {
+  return !status || status === 'active' || status === 'validated';
+}
+
+function formatCreated(iso?: string) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return null;
+  }
 }
 
 function EvidenceCardView({
@@ -72,12 +95,20 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   const { user } = useAuth();
   const ticker = analysis.ticker;
   const { data: thesisData, refetch } = useThesisForTicker(ticker);
-  const activeThesis = thesisData?.theses?.[0] ?? null;
+  const theses = thesisData?.theses ?? [];
+  const activeThesis =
+    theses.find((t: Thesis) => isActiveStatus(t.status)) ?? null;
+  const closedCount = theses.filter(
+    (t: Thesis) => !isActiveStatus(t.status)
+  ).length;
+
   const comparison = useThesisComparison(activeThesis?.id ?? null);
   const createThesis = useCreateThesis();
+  const updateThesis = useUpdateThesis();
   const propose = useProposeThesisFromAnalysis();
   const replay = useReplayThesis();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [confirmNewOpen, setConfirmNewOpen] = useState(false);
   const [diffResult, setDiffResult] = useState<ThesisComparison | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +134,41 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
     });
   }, [activeThesis, snapshot]);
 
+  const createdLabel = formatCreated(activeThesis?.created_at);
+
+  const createFromLatestAnalysis = async () => {
+    const proposal = await propose.mutateAsync({
+      ticker,
+      analysis: {
+        id: analysis.id,
+        ticker: analysis.ticker,
+        summary: analysis.summary,
+        overall_sentiment: analysis.overall_sentiment,
+        overall_confidence: analysis.overall_confidence,
+        skeptic_sentiment: analysis.skeptic_sentiment,
+        key_themes: analysis.key_themes,
+        risks_identified: analysis.risks_identified,
+        timestamp: analysis.timestamp,
+        evidence_ledger: analysis.evidence_ledger,
+        fundamental_data: analysis.fundamental_data,
+        news_articles: analysis.news_articles,
+        price_data: analysis.price_data,
+      },
+    });
+
+    const body: CreateThesisRequest = {
+      ticker: proposal.ticker,
+      thesis_summary: proposal.thesis_summary,
+      conviction_level: proposal.conviction_level,
+      kill_criteria: proposal.kill_criteria,
+      origin_analysis_id: proposal.origin_analysis_id ?? analysis.id,
+      origin_analysis_snapshot: proposal.origin_analysis_snapshot || snapshot,
+      origin_evidence: proposal.origin_evidence || evidenceLedger,
+      structured_kill_criteria: proposal.structured_kill_criteria,
+    };
+    await createThesis.mutateAsync(body);
+  };
+
   const handleProposeAndCreate = async () => {
     setError(null);
     if (!user) {
@@ -110,39 +176,36 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
       return;
     }
     try {
-      const proposal = await propose.mutateAsync({
-        ticker,
-        analysis: {
-          id: analysis.id,
-          ticker: analysis.ticker,
-          summary: analysis.summary,
-          overall_sentiment: analysis.overall_sentiment,
-          overall_confidence: analysis.overall_confidence,
-          skeptic_sentiment: analysis.skeptic_sentiment,
-          key_themes: analysis.key_themes,
-          risks_identified: analysis.risks_identified,
-          timestamp: analysis.timestamp,
-          evidence_ledger: analysis.evidence_ledger,
-          fundamental_data: analysis.fundamental_data,
-          news_articles: analysis.news_articles,
-          price_data: analysis.price_data,
-        },
-      });
-
-      const body: CreateThesisRequest = {
-        ticker: proposal.ticker,
-        thesis_summary: proposal.thesis_summary,
-        conviction_level: proposal.conviction_level,
-        kill_criteria: proposal.kill_criteria,
-        origin_analysis_id: proposal.origin_analysis_id ?? analysis.id,
-        origin_analysis_snapshot: proposal.origin_analysis_snapshot || snapshot,
-        origin_evidence: proposal.origin_evidence || evidenceLedger,
-        structured_kill_criteria: proposal.structured_kill_criteria,
-      };
-      await createThesis.mutateAsync(body);
+      await createFromLatestAnalysis();
       await refetch();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create thesis');
+    }
+  };
+
+  const handleStartNewThesis = async () => {
+    setError(null);
+    if (!user || !activeThesis) return;
+    try {
+      const actives = theses.filter((t: Thesis) => isActiveStatus(t.status));
+      for (const t of actives) {
+        await updateThesis.mutateAsync({
+          thesisId: t.id,
+          updates: {
+            status: 'exited',
+            change_reason:
+              'Closed to start a new active thesis from the latest analysis',
+          },
+        });
+      }
+      await createFromLatestAnalysis();
+      setDiffResult(null);
+      setConfirmNewOpen(false);
+      await refetch();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Failed to start a new thesis'
+      );
     }
   };
 
@@ -173,7 +236,8 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
     }
   };
 
-  const pending = propose.isPending || createThesis.isPending;
+  const pending =
+    propose.isPending || createThesis.isPending || updateThesis.isPending;
   const research = attachedEvidence.filter(
     (e) => String(e.type || '').toLowerCase() !== 'scenario'
   );
@@ -184,9 +248,11 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   return (
     <div className="ui-panel overflow-hidden">
       <div className="flex items-center justify-between border-b border-border-base px-4 py-2.5">
-        <h3 className="ui-label text-txt-secondary">Living thesis</h3>
+        <h3 className="ui-label text-txt-secondary">
+          {ticker} · Living thesis
+        </h3>
         <span className="font-mono text-micro tracking-wide text-txt-muted">
-          {activeThesis ? 'Active' : 'No thesis'}
+          {activeThesis ? 'Active' : 'No active thesis'}
         </span>
       </div>
 
@@ -204,6 +270,14 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               <p className="text-sm font-semibold tracking-tight text-txt-primary">
                 {thesisCopy.headline}
               </p>
+              {createdLabel ? (
+                <p className="mt-1 text-micro text-txt-muted">
+                  Created {createdLabel}
+                  {closedCount > 0
+                    ? ` · ${closedCount} prior thesis${closedCount === 1 ? '' : 'es'} closed`
+                    : ''}
+                </p>
+              ) : null}
               <p className="mt-1.5 text-sm leading-relaxed text-txt-secondary">
                 {thesisCopy.body}
               </p>
@@ -214,7 +288,7 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                 type="button"
                 size="sm"
                 onClick={handleReplay}
-                disabled={replay.isPending}
+                disabled={replay.isPending || pending}
                 className="h-8 gap-2"
               >
                 {replay.isPending ? (
@@ -229,9 +303,20 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
                 variant="outline"
                 size="sm"
                 onClick={() => setEditorOpen(true)}
+                disabled={pending}
                 className="h-8"
               >
                 Edit thesis
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmNewOpen(true)}
+                disabled={!user || pending}
+                className="h-8"
+              >
+                Start new thesis
               </Button>
             </div>
 
@@ -286,37 +371,85 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
             )}
           </>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleProposeAndCreate}
-              disabled={!user || pending}
-              className="h-8 gap-2"
-            >
-              {pending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Sparkles className="h-3 w-3" />
-              )}
-              Propose & create thesis
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditorOpen(true)}
-              disabled={!user}
-              className="h-8 gap-2"
-            >
-              <BookMarked className="h-3 w-3" />
-              Customize
-            </Button>
+          <div className="space-y-3">
+            {closedCount > 0 ? (
+              <p className="text-sm text-txt-secondary">
+                No active thesis. {closedCount} prior thesis
+                {closedCount === 1 ? '' : 'es'} preserved as history.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleProposeAndCreate}
+                disabled={!user || pending}
+                className="h-8 gap-2"
+              >
+                {pending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                Propose & create thesis
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditorOpen(true)}
+                disabled={!user}
+                className="h-8 gap-2"
+              >
+                <BookMarked className="h-3 w-3" />
+                Customize
+              </Button>
+            </div>
           </div>
         )}
 
         {error && <p className="text-sm text-bear">{error}</p>}
       </div>
+
+      {confirmNewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-md border border-border-base bg-surface-1 p-5 shadow-xl">
+            <h4 className="text-sm font-semibold text-txt-primary">
+              Start a new {ticker} thesis?
+            </h4>
+            <p className="mt-2 text-sm leading-relaxed text-txt-secondary">
+              {ticker} already has an active thesis. Starting a new one will{' '}
+              <span className="text-txt-primary">close</span> the current
+              thesis (history, attachments, and origin evidence stay preserved)
+              and create a new <span className="text-txt-primary">active</span>{' '}
+              thesis from the latest analysis.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() => setConfirmNewOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleStartNewThesis()}
+                className="gap-2"
+              >
+                {pending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : null}
+                Close current & create new
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ThesisEditor
         isOpen={editorOpen}

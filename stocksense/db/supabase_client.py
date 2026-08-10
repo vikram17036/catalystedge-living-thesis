@@ -452,7 +452,7 @@ def get_active_thesis_for_ticker(
     for t in theses:
         if (t.get("status") or "active") == "active":
             return t
-    return theses[0] if theses else None
+    return None
 
 
 def enrich_thesis_with_attachments(

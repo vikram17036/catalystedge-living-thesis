@@ -7,11 +7,13 @@ import {
   Box,
   User,
   ChevronRight,
+  FlaskConical,
+  LineChart,
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { cn } from '../utils/cn';
 
-type ViewType = 'dashboard' | 'history' | 'theses' | 'alerts';
+type ViewType = 'dashboard' | 'history' | 'research' | 'lab' | 'theses' | 'alerts';
 
 interface CommandRailProps {
   currentView: ViewType;
@@ -21,6 +23,8 @@ interface CommandRailProps {
 const primaryItems = [
   { icon: LayoutDashboard, label: 'ANALYSIS', viewId: 'dashboard' as ViewType },
   { icon: History, label: 'HISTORY', viewId: 'history' as ViewType },
+  { icon: FlaskConical, label: 'RESEARCH', viewId: 'research' as ViewType },
+  { icon: LineChart, label: 'LAB', viewId: 'lab' as ViewType },
 ];
 
 const advancedItems = [

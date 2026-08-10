@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
-from stocksense.core.contracts import Evidence, EvidenceType
+from stocksense.core.contracts import Evidence, EvidenceType, EventStudyResult
 
 
 def _utcnow() -> datetime:
@@ -142,6 +142,75 @@ def ledger_from_analysis_payload(
             out.append(from_news_article(t, article, available_at=as_of))
 
     return out
+
+
+def from_event_study_result(
+    result: EventStudyResult,
+    *,
+    evidence_id: Optional[str] = None,
+    observed_at: Optional[datetime] = None,
+) -> Evidence:
+    """Single EVENT_STUDY evidence summarizing the experiment (not per-observation)."""
+    ts = observed_at or _utcnow()
+    spec = result.spec
+    repro = result.reproducibility
+    eid = evidence_id or _eid(
+        spec.ticker,
+        "event_study",
+        spec.calendar_id,
+        spec.event_filter.value,
+        str(spec.pre_window),
+        str(spec.post_window),
+        repro.price_data_hash,
+    )
+    data = {
+        "ticker": spec.ticker,
+        "calendar_id": spec.calendar_id,
+        "event_filter": spec.event_filter.value,
+        "pre_window": spec.pre_window,
+        "post_window": spec.post_window,
+        "calendar_events": result.calendar_events,
+        "eligible_events": result.eligible_events,
+        "events_analyzed": result.events_analyzed,
+        "excluded_events": result.excluded_events,
+        "pre": {
+            "window": spec.pre_window,
+            "mean": result.pre_stats.mean,
+            "median": result.pre_stats.median,
+            "positive_rate": result.pre_stats.positive_rate,
+        },
+        "event": {
+            "mean": result.event_stats.mean,
+            "median": result.event_stats.median,
+            "positive_rate": result.event_stats.positive_rate,
+        },
+        "post": {
+            "window": spec.post_window,
+            "mean": result.post_stats.mean,
+            "median": result.post_stats.median,
+            "positive_rate": result.post_stats.positive_rate,
+        },
+        "engine_version": repro.engine_version,
+        "price_data_hash": repro.price_data_hash,
+    }
+    return Evidence(
+        id=eid,
+        type=EvidenceType.EVENT_STUDY,
+        entity=spec.ticker,
+        observed_at=ts,
+        available_at=ts,
+        source="catalystedge:event-study",
+        metric="event_study_summary",
+        value=result.events_analyzed,
+        data=data,
+        provenance={
+            "calendar_id": repro.calendar_id,
+            "engine_version": repro.engine_version,
+            "price_source": repro.price_source,
+            "price_mode": repro.price_mode,
+            "price_data_hash": repro.price_data_hash,
+        },
+    )
 
 
 def index_by_id(evidence: List[Evidence]) -> Dict[str, Evidence]:

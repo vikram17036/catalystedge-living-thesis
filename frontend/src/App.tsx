@@ -12,6 +12,8 @@ import AlertsCenter from './components/AlertsCenter';
 import EmptyState from './components/EmptyState';
 import ErrorBoundary from './components/ErrorBoundary';
 import ThesesPage from './pages/ThesesPage';
+import ResearchPage from './pages/ResearchPage';
+import LabPage from './pages/LabPage';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, useToast } from './components/ui/toast';
 import { useAppKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -25,7 +27,7 @@ import { cn } from './utils/cn';
 
 function AppContent() {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'history' | 'theses' | 'alerts'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'history' | 'research' | 'lab' | 'theses' | 'alerts'>('dashboard');
   const { addToast } = useToast();
   const { user } = useAuth();
   const tickerInputRef = useRef<TickerInputRef>(null);
@@ -167,6 +169,34 @@ function AppContent() {
               <AnalysisHistory onSelectHistory={handleSelectHistory} />
             </div>
           </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Render Research (Event Study) view
+  if (currentView === 'research') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header />
+          <ResearchPage />
+        </main>
+      </div>
+    );
+  }
+
+  // Render Strategy Lab view
+  if (currentView === 'lab') {
+    return (
+      <div className="flex min-h-screen bg-canvas font-mono text-txt-primary selection:bg-accent selection:text-canvas antialiased relative">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+        <CommandRail onNavigate={setCurrentView} currentView={currentView} />
+        <main className="flex flex-1 flex-col ml-14 relative z-10">
+          <Header />
+          <LabPage />
         </main>
       </div>
     );

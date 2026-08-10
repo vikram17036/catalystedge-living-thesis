@@ -140,6 +140,22 @@ try:
 except ImportError as e:
     logger.warning(f"Auth routes not available: {e}")
 
+# Phase 2 research routes (Event Study)
+try:
+    from stocksense.api.research_routes import router as research_router
+    app.include_router(research_router)
+    logger.info("Research routes registered successfully")
+except ImportError as e:
+    logger.warning(f"Research routes not available: {e}")
+
+# Phase 3 Strategy Lab
+try:
+    from stocksense.api.lab_routes import router as lab_router
+    app.include_router(lab_router)
+    logger.info("Lab routes registered successfully")
+except ImportError as e:
+    logger.warning(f"Lab routes not available: {e}")
+
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP from request."""

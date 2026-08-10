@@ -66,7 +66,11 @@ Replay → Diff still uses original baseline; WHY shows three sections
 
 # NEXT
 
-**Deploy (in progress):** push main → Render backend + Vercel frontend; run `006` + `007` on **prod** Supabase SQL editor.
+**Deploy status (2026-08-09):**
+- Pushed `2b6b2ae` to `main` (Phase 4 attach fixes + `007` grants).
+- **Vercel frontend:** Production deploy for `2b6b2ae` succeeded → https://catalystedge-living-thesis-pearl.vercel.app
+- **Render backend:** still serving Phase‑1 OpenAPI (no `/attach-by-ticker`, research, lab). **Manual Redeploy** required in Render for `catalystedge-backend` (auto-deploy may be off / stale).
+- **Prod Supabase:** run `006_thesis_evidence.sql` + `007_thesis_evidence_grants.sql` in the **production** project SQL editor (if not already).
 
 Then Phase 5+ only when intentional:
 

@@ -120,8 +120,8 @@ Not blockers for the demo, but incomplete:
 | Streaming vs POST analyze | Primary UX is SSE stream; kill check on stream path is still thinner than POST+auth |
 | Qualitative kill criteria | Deterministic kills work; AI+citations qualitative path not fully built |
 | Debate as hero | Still in codebase; demoted conceptually — Challenge under Diff later |
-| Git remote | Local copy; not yet formally forked/pushed to `vikram17036` |
-| Production deploy | Documented in `DEPLOY.md`; not live yet (Vercel FE + Render BE) |
+| Git remote | **Done** — https://github.com/vikram17036/catalystedge-living-thesis (`main`) |
+| Production deploy | In progress — Vercel FE + Render BE; smoke test not yet run on public URLs |
 
 ---
 
@@ -139,9 +139,9 @@ Deploy → production smoke test → freeze Phase 1 → Event Study (Phase 2)
 - **Do not** refactor the thesis engine or add features.
 - If Render/Vercel config is annoying, **do not destabilize the local demo** — local Phase 1 stays valuable; deploy is distribution.
 
-### Step A — Deploy (in progress / next)
+### Step A — Deploy (in progress)
 
-1. Push repo to GitHub (`vikram17036`) with attribution to original CatalystEdge authors.
+1. ~~Push repo to GitHub (`vikram17036`)~~ → https://github.com/vikram17036/catalystedge-living-thesis
 2. **Vercel:** project root = `frontend`; env `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` → Render backend URL.
 3. **Render:** use `render.yaml`; secrets = Google / NewsAPI / Supabase; `CORS_ORIGINS` = Vercel URL.
 4. **Production smoke (exact regression — same as local):**
@@ -243,6 +243,8 @@ npm run dev
 4. Shipped Phase 1: propose/create thesis, replay fixtures, Diff/Why UI, kill alerts banner.
 5. Verified end-to-end kill alert on NVDA adverse replay.
 6. API stabilized on **`:8002`** after Windows reload hang on `:8001`.
+7. Locked roadmap: Deploy → prod smoke → freeze Phase 1 → Event Study (no thesis-engine refactors during deploy).
+8. Pushed Phase 1 to GitHub (`vikram17036/catalystedge-living-thesis`); removed unused keep-supabase-alive workflow (OAuth `workflow` scope block).
 
 ---
 

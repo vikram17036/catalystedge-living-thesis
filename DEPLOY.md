@@ -54,9 +54,17 @@ In Supabase SQL editor (your project), run migrations in order under `supabase/`
 2. Set the same secrets as `.env` (Google, NewsAPI, Supabase).
 3. Set `CORS_ORIGINS` to your Vercel URL (comma-separated if multiple).
 
-### Smoke check after deploy
+### Smoke check after deploy (exact Phase 1 regression)
 
-1. Open Vercel URL → sign in (Supabase Auth).
-2. Analyze a ticker → see summary + evidence.
-3. Create thesis → confirm row in `theses`.
-4. Trigger kill path / scheduler → row in `thesis_alerts` (and legacy `alert_history` during migration).
+Fresh browser session on **public** URLs only:
+
+```text
+login → analyze NVDA → create thesis → replay adverse fixture
+     → Thesis Diff → WHY evidence → kill banner → alerts center
+```
+
+If that passes, deployment is done and Phase 1 is frozen. Do not refactor the thesis engine to “fix” hosting issues — keep the local demo intact.
+
+### Rule
+
+Deploy is distribution. If Render/Vercel config is painful, stop and leave local Phase 1 alone rather than rewriting working code.

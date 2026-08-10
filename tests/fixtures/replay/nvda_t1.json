@@ -1,0 +1,77 @@
+{
+  "ticker": "NVDA",
+  "label": "nvda_t1",
+  "as_of": "2026-08-08T16:00:00+00:00",
+  "evidence": [
+    {
+      "id": "ev_e1a613ac6a931b53",
+      "type": "market",
+      "entity": "NVDA",
+      "observed_at": "2026-08-08T16:00:00Z",
+      "available_at": "2026-08-08T16:00:00Z",
+      "source": "yahoo_finance",
+      "metric": "one_day_return",
+      "value": -0.07,
+      "data": {
+        "one_day_return": -0.07
+      },
+      "provenance": {},
+      "url": null
+    },
+    {
+      "id": "ev_7e06f9db0c1d49d4",
+      "type": "fundamental",
+      "entity": "NVDA",
+      "observed_at": "2026-08-08T16:00:00Z",
+      "available_at": "2026-08-08T16:00:00Z",
+      "source": "yahoo_finance",
+      "metric": "grossMargins",
+      "value": 0.72,
+      "data": {},
+      "provenance": {
+        "provider": "yahoo_finance"
+      },
+      "url": null
+    },
+    {
+      "id": "ev_d4189d2d4dd56032",
+      "type": "news",
+      "entity": "NVDA",
+      "observed_at": "2026-08-08T16:00:00Z",
+      "available_at": "2026-08-08T16:00:00Z",
+      "source": "fixture",
+      "metric": "headline",
+      "value": "Chip demand fears spark NVIDIA selloff",
+      "data": {
+        "description": null,
+        "url": "https://example.com/nvda-t1"
+      },
+      "provenance": {},
+      "url": "https://example.com/nvda-t1"
+    }
+  ],
+  "analysis_payload": {
+    "ticker": "NVDA",
+    "overall_sentiment": "Bearish",
+    "overall_confidence": 0.78,
+    "skeptic_sentiment": "Agree",
+    "summary": "T1: adverse shock \u2014 demand fears and sharp drawdown.",
+    "risks_identified": [
+      "AI capex digestion",
+      "One-day drawdown > 5%"
+    ],
+    "key_themes": [
+      {
+        "theme": "Demand Digestion",
+        "sentiment_direction": "Bearish",
+        "headline_count": 3,
+        "summary": "Fears"
+      }
+    ],
+    "timestamp": "2026-08-08T16:00:00+00:00",
+    "price_data": {
+      "percent_change": -0.07
+    },
+    "pipeline": "fixture"
+  }
+}

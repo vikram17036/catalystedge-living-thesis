@@ -1,0 +1,31 @@
+# StockSense Agent — Python Direct Dependencies
+# Generated against Python 3.12+
+# Regenerate lockfile: pip install pip-tools && pip-compile requirements.txt -o requirements.lock
+
+# ── Core API ──────────────────────────────────────────────────────────────────
+fastapi>=0.135.1
+uvicorn[standard]>=0.41.0       # [standard] pulls in httptools + uvloop for production
+requests>=2.32.5
+
+# ── AI / Orchestration ────────────────────────────────────────────────────────
+langgraph>=1.0.10
+langchain-core>=1.2.17
+langchain-google-genai>=4.2.1
+
+# ── Auth & Database ───────────────────────────────────────────────────────────
+supabase>=2.28.0
+
+# ── Data Sources ──────────────────────────────────────────────────────────────
+yfinance>=1.2.0
+newsapi-python>=0.2.7
+
+# ── Data Processing ───────────────────────────────────────────────────────────
+pandas>=3.0.1
+numpy>=2.4.2
+pydantic>=2.12.5
+
+# ── Background Scheduling ─────────────────────────────────────────────────────
+APScheduler>=3.11.2
+
+# ── Environment ───────────────────────────────────────────────────────────────
+python-dotenv>=1.2.2

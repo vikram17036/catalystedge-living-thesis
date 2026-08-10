@@ -1,0 +1,85 @@
+{
+  "ticker": "NVDA",
+  "label": "nvda_t0",
+  "as_of": "2026-08-01T16:00:00+00:00",
+  "evidence": [
+    {
+      "id": "ev_a253c6ce64a03ccb",
+      "type": "market",
+      "entity": "NVDA",
+      "observed_at": "2026-08-01T16:00:00Z",
+      "available_at": "2026-08-01T16:00:00Z",
+      "source": "yahoo_finance",
+      "metric": "one_day_return",
+      "value": 0.0227,
+      "data": {
+        "one_day_return": 0.0227
+      },
+      "provenance": {},
+      "url": null
+    },
+    {
+      "id": "ev_19b58e994652d8aa",
+      "type": "fundamental",
+      "entity": "NVDA",
+      "observed_at": "2026-08-01T16:00:00Z",
+      "available_at": "2026-08-01T16:00:00Z",
+      "source": "yahoo_finance",
+      "metric": "grossMargins",
+      "value": 0.75,
+      "data": {},
+      "provenance": {
+        "provider": "yahoo_finance"
+      },
+      "url": null
+    },
+    {
+      "id": "ev_6a02d7af92bb00c0",
+      "type": "news",
+      "entity": "NVDA",
+      "observed_at": "2026-08-01T16:00:00Z",
+      "available_at": "2026-08-01T16:00:00Z",
+      "source": "fixture",
+      "metric": "headline",
+      "value": "NVIDIA AI demand remains strong",
+      "data": {
+        "description": null,
+        "url": "https://example.com/nvda-t0"
+      },
+      "provenance": {},
+      "url": "https://example.com/nvda-t0"
+    }
+  ],
+  "analysis_payload": {
+    "ticker": "NVDA",
+    "overall_sentiment": "Bullish",
+    "overall_confidence": 0.85,
+    "skeptic_sentiment": "Disagree",
+    "summary": "T0: AI growth and infrastructure expansion support bullish thesis.",
+    "risks_identified": [
+      "Valuation"
+    ],
+    "key_themes": [
+      {
+        "theme": "AI Growth",
+        "sentiment_direction": "Bullish",
+        "headline_count": 5,
+        "summary": "Demand"
+      }
+    ],
+    "timestamp": "2026-08-01T16:00:00+00:00",
+    "price_data": {
+      "percent_change": 0.0227
+    },
+    "pipeline": "fixture"
+  },
+  "origin_analysis_snapshot": {
+    "sentiment": "Bullish",
+    "confidence": 0.85,
+    "skeptic_verdict": "Disagree",
+    "key_themes": [
+      "AI Growth"
+    ],
+    "timestamp": "2026-08-01T16:00:00+00:00"
+  }
+}

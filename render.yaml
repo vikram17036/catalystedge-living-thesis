@@ -1,0 +1,35 @@
+# Render deployment configuration for StockSense Agent
+
+services:
+  # Backend API Service
+  - type: web
+    name: stocksense-backend
+    runtime: python
+    plan: free
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: NEWSAPI_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: STOCKSENSE_DB_PATH
+        value: /var/data/stocksense.db
+      - key: LOG_LEVEL
+        value: info
+      - key: PORT
+        value: 8000
+    disk:
+      name: analysis-cache
+      mountPath: /var/data
+      sizeGB: 1
+    buildCommand: pip install --no-cache-dir -r requirements-backend.txt
+    startCommand: uvicorn stocksense.main:app --host 0.0.0.0 --port $PORT
+
+# NOTE: React frontend should be deployed to Vercel, Netlify, or similar static hosting.
+# Build with: cd frontend && npm run build
+# Set VITE_API_URL environment variable to point to this backend URL.

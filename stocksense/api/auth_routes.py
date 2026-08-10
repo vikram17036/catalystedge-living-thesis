@@ -18,6 +18,9 @@ from stocksense.db.supabase_client import (
     create_thesis,
     update_thesis,
     get_thesis_history,
+    attach_thesis_evidence,
+    get_active_thesis_for_ticker,
+    enrich_thesis_with_attachments,
 )
 
 router = APIRouter(prefix="/api", tags=["User"])
@@ -99,8 +102,12 @@ class ThesisResponse(BaseModel):
     origin_analysis_snapshot: Optional[dict] = None
     origin_evidence: Optional[List[dict]] = None
     structured_kill_criteria: Optional[List[dict]] = None
+    attached_evidence: Optional[List[dict]] = None
     created_at: str
     updated_at: str
+
+    class Config:
+        extra = "ignore"
 
 
 # ============================================
@@ -195,9 +202,13 @@ async def remove_position(position_id: str, user = Depends(get_current_user)):
 
 @router.get("/theses")
 async def list_theses(ticker: Optional[str] = None, user = Depends(get_current_user)):
-    """Get all theses, optionally filtered by ticker."""
+    """Get all theses, optionally filtered by ticker. Includes attached_evidence."""
     theses = get_user_theses(user["id"], user["access_token"], ticker)
-    return {"theses": theses, "count": len(theses)}
+    enriched = [
+        enrich_thesis_with_attachments(user["id"], user["access_token"], t)
+        for t in theses
+    ]
+    return {"theses": enriched, "count": len(enriched)}
 
 
 @router.post("/theses", response_model=ThesisResponse)
@@ -208,13 +219,22 @@ async def add_thesis(thesis: ThesisCreate, user = Depends(get_current_user)):
     if not result:
         raise HTTPException(status_code=400, detail="Failed to create thesis")
     
-    return result
+    return enrich_thesis_with_attachments(user["id"], user["access_token"], result)
 
 
 class FromAnalysisRequest(BaseModel):
     ticker: str
     analysis: Optional[dict] = None
     use_cache: bool = True
+
+
+class AttachEvidenceBody(BaseModel):
+    evidence: dict
+
+
+class AttachByTickerBody(BaseModel):
+    ticker: str
+    evidence: dict
 
 
 @router.post("/theses/from-analysis")
@@ -273,6 +293,60 @@ async def propose_thesis_from_analysis_route(
 
     proposal = propose_thesis_from_analysis(analysis, evidence_ledger=ledger)
     return {"proposal": proposal, "persisted": False}
+
+
+@router.post("/theses/attach-by-ticker")
+async def attach_evidence_by_ticker(
+    body: AttachByTickerBody,
+    user=Depends(get_current_user),
+):
+    """Attach Event Study / Backtest evidence to active thesis for ticker."""
+    from stocksense.core.thesis_attach import AttachError
+
+    ticker = body.ticker.upper().strip()
+    thesis = get_active_thesis_for_ticker(user["id"], user["access_token"], ticker)
+    if not thesis:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Create a thesis for {ticker} first (Analysis → PROPOSE_AND_CREATE_THESIS).',
+        )
+    try:
+        result = attach_thesis_evidence(
+            user["id"], user["access_token"], thesis["id"], body.evidence
+        )
+    except AttachError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Attach failed: {e}") from e
+
+    enriched = enrich_thesis_with_attachments(
+        user["id"], user["access_token"], result["thesis"]
+    )
+    return {**result, "thesis": enriched}
+
+
+@router.post("/theses/{thesis_id}/attach-evidence")
+async def attach_evidence_to_thesis(
+    thesis_id: str,
+    body: AttachEvidenceBody,
+    user=Depends(get_current_user),
+):
+    """Append research evidence to thesis_evidence (never origin_evidence)."""
+    from stocksense.core.thesis_attach import AttachError
+
+    try:
+        result = attach_thesis_evidence(
+            user["id"], user["access_token"], thesis_id, body.evidence
+        )
+    except AttachError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Attach failed: {e}") from e
+
+    enriched = enrich_thesis_with_attachments(
+        user["id"], user["access_token"], result["thesis"]
+    )
+    return {**result, "thesis": enriched}
 
 
 @router.patch("/theses/{thesis_id}", response_model=ThesisResponse)

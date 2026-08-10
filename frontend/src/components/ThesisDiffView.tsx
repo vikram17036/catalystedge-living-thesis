@@ -18,12 +18,14 @@ interface EvidenceItem {
 interface ThesisDiffViewProps {
   comparison: ThesisComparison | null;
   originEvidence?: EvidenceItem[];
+  attachedEvidence?: EvidenceItem[];
   replayEvidence?: EvidenceItem[];
 }
 
 export default function ThesisDiffView({
   comparison,
   originEvidence = [],
+  attachedEvidence = [],
   replayEvidence = [],
 }: ThesisDiffViewProps) {
   const [showWhy, setShowWhy] = useState(false);
@@ -82,7 +84,24 @@ export default function ThesisDiffView({
     return null;
   }
 
-  const ledger = [...originEvidence, ...replayEvidence];
+  const renderLedger = (title: string, items: EvidenceItem[]) => (
+    <div className="space-y-1">
+      <p className="text-micro font-mono font-bold text-txt-primary uppercase tracking-widest">
+        {title}
+      </p>
+      {items.length === 0 && (
+        <p className="text-micro font-mono text-txt-muted uppercase">None</p>
+      )}
+      {items.map((e, i) => (
+        <div key={e.id || i} className="text-micro font-mono text-txt-secondary tracking-wide">
+          <span className="text-accent">{e.id || `row_${i}`}</span>
+          {' // '}
+          {e.type || 'ev'} · {e.metric || '—'} = {String(e.value ?? '—')}
+          {e.source ? ` · ${e.source}` : ''}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="border border-accent/30 bg-accent/5 rounded-sm overflow-hidden">
@@ -139,21 +158,13 @@ export default function ThesisDiffView({
       )}
 
       {showWhy && (
-        <div className="border-t border-border-base bg-surface-1 p-3 space-y-2 max-h-48 overflow-y-auto">
-          <p className="text-micro font-mono font-bold text-txt-primary uppercase tracking-widest">
-            EVIDENCE_LEDGER
+        <div className="border-t border-border-base bg-surface-1 p-3 space-y-3 max-h-64 overflow-y-auto">
+          {renderLedger('ORIGIN_EVIDENCE (frozen)', originEvidence)}
+          {renderLedger('ATTACHED_RESEARCH', attachedEvidence)}
+          {renderLedger('CURRENT_EVIDENCE (replay/eval)', replayEvidence)}
+          <p className="text-micro font-mono text-txt-muted uppercase tracking-wide">
+            Diff compares ORIGIN vs CURRENT only. Attached research is citation context.
           </p>
-          {ledger.length === 0 && (
-            <p className="text-micro font-mono text-txt-muted uppercase">No evidence rows attached</p>
-          )}
-          {ledger.map((e, i) => (
-            <div key={e.id || i} className="text-micro font-mono text-txt-secondary tracking-wide">
-              <span className="text-accent">{e.id || `row_${i}`}</span>
-              {' // '}
-              {e.type || 'ev'} · {e.metric || '—'} = {String(e.value ?? '—')}
-              {e.source ? ` · ${e.source}` : ''}
-            </div>
-          ))}
         </div>
       )}
     </div>

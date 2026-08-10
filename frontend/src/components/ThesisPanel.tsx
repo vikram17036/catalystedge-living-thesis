@@ -56,6 +56,9 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
   const activeDiff = diffResult || comparison.data || null;
   const originEvidence =
     (activeThesis?.origin_evidence as typeof evidenceLedger) || evidenceLedger || [];
+  const attachedEvidence = (activeThesis?.attached_evidence || []) as NonNullable<
+    typeof evidenceLedger
+  >;
 
   const handleProposeAndCreate = async () => {
     setError(null);
@@ -181,9 +184,27 @@ export default function ThesisPanel({ analysis, onAlertCreated }: ThesisPanelPro
               </Button>
             </div>
 
+            {attachedEvidence.length > 0 && (
+              <div className="border border-border-base/60 bg-surface-2/40 rounded-sm p-3 space-y-1">
+                <p className="text-micro font-mono font-bold uppercase tracking-widest text-accent">
+                  ATTACHED_EXPERIMENTS
+                </p>
+                {attachedEvidence.map((e, i) => (
+                  <div
+                    key={(e.id as string) || i}
+                    className="text-micro font-mono text-txt-secondary uppercase tracking-wide"
+                  >
+                    {String(e.type || 'research')} · {String(e.metric || '—')} ={' '}
+                    {String(e.value ?? '—')}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <ThesisDiffView
               comparison={activeDiff}
               originEvidence={originEvidence}
+              attachedEvidence={attachedEvidence}
               replayEvidence={[]}
             />
           </>

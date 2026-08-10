@@ -8,6 +8,7 @@ import {
   type EventStudySpec,
   type WindowStats,
 } from '../api/eventStudy';
+import { attachEvidenceByTicker } from '../api/theses';
 import { cn } from '../utils/cn';
 
 const CHIPS = [
@@ -49,8 +50,38 @@ export default function ResearchPage() {
   const [response, setResponse] = useState<EventStudyResponse | null>(null);
   const [showObs, setShowObs] = useState(false);
   const [showWhy, setShowWhy] = useState(true);
+  const [attachMsg, setAttachMsg] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
 
   const priorSpec: EventStudySpec | null = response?.spec ?? null;
+
+  async function attachToThesis() {
+    const ev = response?.evidence_ledger?.[0];
+    const ticker = response?.spec?.ticker;
+    if (!ev || !ticker) {
+      setAttachMsg('No evidence to attach.');
+      return;
+    }
+    setAttaching(true);
+    setAttachMsg(null);
+    try {
+      const res = await attachEvidenceByTicker(ticker, ev);
+      setAttachMsg(
+        res.already_attached
+          ? 'Already attached to thesis.'
+          : 'Attached to thesis (thesis_evidence — origin unchanged).'
+      );
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response
+          ?.data?.detail ||
+        (e as { message?: string })?.message ||
+        'Attach failed';
+      setAttachMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   async function submit(q: string) {
     if (!user) {
@@ -158,10 +189,23 @@ export default function ResearchPage() {
                 <h2 className="font-mono text-lg font-bold text-txt-primary">
                   {spec.ticker} × FOMC
                 </h2>
-                <span className="font-mono text-micro uppercase tracking-widest text-txt-muted">
-                  {result.reproducibility.engine_version} · {spec.calendar_id}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-micro uppercase tracking-widest text-txt-muted">
+                    {result.reproducibility.engine_version} · {spec.calendar_id}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void attachToThesis()}
+                    disabled={attaching}
+                    className="rounded-sm border border-accent bg-accent/10 px-2.5 py-1 font-mono text-micro font-bold uppercase tracking-widest text-accent hover:bg-accent/20 disabled:opacity-40"
+                  >
+                    {attaching ? '…' : 'ATTACH_TO_THESIS'}
+                  </button>
+                </div>
               </div>
+              {attachMsg && (
+                <p className="mt-2 font-mono text-micro text-txt-secondary">{attachMsg}</p>
+              )}
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>

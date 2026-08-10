@@ -1,103 +1,98 @@
-# CatalystEdge — Living Thesis Status
+# CatalystEdge — STATUS (single source of truth)
 
 **Last updated:** 2026-08-09  
-**Owner project:** `C:\Users\vikra\projects\catalystedge-ai-catalystedge-mvp`  
-**GitHub:** https://github.com/vikram17036/catalystedge-living-thesis  
-**Local stack:** Frontend `http://localhost:3002` (or 3000) → API `http://127.0.0.1:8002`  
-**Production:** Frontend https://catalystedge-living-thesis-pearl.vercel.app · Backend https://catalystedge-backend.onrender.com
+**Repo:** https://github.com/vikram17036/catalystedge-living-thesis  
+**Local:** UI `localhost:3002` (or 3000) → API `127.0.0.1:8002`  
+**Prod:** https://catalystedge-living-thesis-pearl.vercel.app · https://catalystedge-backend.onrender.com  
+*(Phase 2–4 code on GitHub; full prod redeploy deferred)*
+
+**Rule:** Keep **done** and **next** in this document only. Do not spawn separate phase plan files.
 
 ---
 
-## 1. Product vision (locked)
+## Product (locked)
 
-CatalystEdge is **Living Market Thesis Intelligence**, not a stock chatbot.
+1. Models interpret; tools calculate.  
+2. Replayability first-class.  
+3. Deterministic kills/stats in code.  
+4. No `exec()` of LLM Python.  
+5. **`origin_evidence` is frozen at thesis create** — later research never rewrites it.
 
-**Permanent rules:**
-
-1. Models interpret; tools calculate (no invented metrics / evidence IDs).
-2. Replayability is first-class.
-3. Deterministic kills / stats in code; qualitative needs citations (later).
-4. No `exec()` of LLM-generated Python.
-
-**Interview progression:**
-
-> Phase 1: preserve and challenge a belief.  
-> Phase 2: test whether a historical claim is true.  
-> Phase 3: test what would have happened if you acted on a rule — without giving the LLM executable control.
+**Progression:** P1 belief → P2 historical test → P3 safe rule sim → P4 attach research without rewriting origin
 
 ---
 
-## 2. Phase 1 — FROZEN
+# DONE SO FAR
 
-Live and verified. Thesis engine frozen except blocking production bugs.
+## Phase 1 — Living Thesis — FROZEN (prod smoke)
 
-Prod smoke: login → analyze NVDA → create thesis → replay adverse → Diff → WHY → kill banner → alerts.
+Analyze → thesis → origin freeze → replay → Diff/Why → kill → alerts.
 
-| Piece | URL |
-|-------|-----|
-| Frontend | https://catalystedge-living-thesis-pearl.vercel.app |
-| Backend | https://catalystedge-backend.onrender.com |
+## Phase 2 — Event Study — FROZEN locally
 
----
+RESEARCH: NVDA FOMC → hikes → ±5d. Pure engine + `fomc_v1`.
 
-## 3. Phase 2 Event Study — FROZEN
+## Phase 3 — Strategy Lab — locally verified
 
-**Status: locally verified; ship to prod with this freeze.** Research/Event Study code frozen except blocking bugs.
+LAB: 20/50 SMA NVDA → costs → show DD/hit rate (no spec mutation).
 
-**Promise:** NL defines the experiment; typed contracts constrain it; deterministic code computes it; AI only interprets measured results.
+## Phase 4 — Attach Experiments — IMPLEMENTED
 
-**Local DoD (passed):**
+**Storage:** `thesis_evidence` table (`006_thesis_evidence.sql`) — **not** `origin_evidence`.
+
+**API:** `POST /api/theses/attach-by-ticker`, `POST /api/theses/{id}/attach-evidence`
+
+**UI:** ATTACH_TO_THESIS on RESEARCH + LAB; ATTACHED_EXPERIMENTS on ThesisPanel; WHY = ORIGIN | ATTACHED | CURRENT (Diff math still origin vs current only).
+
+**Required once in Supabase SQL editor:** run `supabase/migrations/006_thesis_evidence.sql`
+
+### Hero demo
 
 ```text
-RESEARCH → What happens to NVDA around FOMC decisions?
-        → Only rate hikes.
-        → Compare five days before with five days after.
+Create NVDA thesis → origin frozen
+RESEARCH → ATTACH_TO_THESIS
+LAB → ATTACH_TO_THESIS
+ThesisPanel → ATTACHED_EXPERIMENTS
+Replay → Diff still uses original baseline; WHY shows three sections
 ```
 
-Kernel: `EventStudySpec` / pure engine / `fomc_v1` / sample accounting / price fingerprint / `research_routes` / RESEARCH UI.
+### Regression
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_event_study.py tests/test_event_study_parse.py tests/test_event_study_interpret.py tests/test_thesis_loop.py tests/test_thesis_diff.py tests/test_contracts.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_thesis_attach.py tests/test_thesis_loop.py tests/test_event_study.py tests/test_strategy_lab.py tests/test_contracts.py -q
 ```
 
-**Prod smoke after deploy:** same three-turn RESEARCH on public URLs (+ Phase 1 quick regression).
+---
+
+# NEXT
+
+Deploy when you want (Render + Vercel + run migration on prod Supabase).  
+
+Then Phase 5+ only when intentional:
+
+| Phase | Theme |
+|-------|--------|
+| 5 | Historical Analog Search |
+| 6 | Scenario Lab + Thesis Dependency Graph |
+| 7 | Research Memory + Postmortems |
+| 8 | Deep eval + observability |
 
 ---
 
-## 4. What’s next — Phase 3 Strategy Lab (IN PROGRESS)
-
-Long-only **SMA crossover only**. Typed `SmaCrossoverParams` (no free params dict). Signal at `t`, fill at `t+1`. Position sized including entry commission. Costs via counterfactual gross / commission-only / net. Daily MTM equity → max drawdown. No `exec()`, no RSI/breakout/Sharpe.
-
-**Hero demo:**
-
-1. “Backtest a 20/50 SMA crossover on NVDA since 2020.”
-2. “Add 5 bps commission and 2 bps slippage.” → mutate costs, rerun
-3. “Show max drawdown and hit rate.” → **no spec mutation**; surface metrics
-
-Build gate: contracts → golden fixture → pure SMA engine → API/UI → DoD → **stop**.
-
----
-
-## 5. How to start locally
+## Local cheat sheet
 
 ```powershell
 cd C:\Users\vikra\projects\catalystedge-ai-catalystedge-mvp
 .\.venv\Scripts\uvicorn.exe stocksense.main:app --host 127.0.0.1 --port 8002
-
 cd frontend
-# VITE_API_URL=http://127.0.0.1:8002
 npm run dev
 ```
 
 ---
 
-## 6. Change log
+## Change log
 
-1. Phase 0–1 Living Thesis shipped + production smoke.
-2. Phase 1 frozen.
-3. Phase 2 Event Study implemented + local three-turn demo green.
-4. **Phase 2 frozen** (2026-08-09); Phase 3 Strategy Lab started.
+1. P1–P3 as above.  
+2. Phase 4: `thesis_evidence` + attach APIs + UI; origin/Diff untouched.  
 
----
-
-*Source of truth for what’s done / what’s next.*
+*Maintain only this file for what’s done / what’s next.*

@@ -8,6 +8,7 @@ import {
   type BacktestResult,
   type StrategySpec,
 } from '../api/strategyLab';
+import { attachEvidenceByTicker } from '../api/theses';
 
 const CHIPS = [
   'Backtest a 20/50 SMA crossover on NVDA since 2020.',
@@ -27,9 +28,39 @@ export default function LabPage() {
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<BacktestResponse | null>(null);
   const [showWhy, setShowWhy] = useState(true);
+  const [attachMsg, setAttachMsg] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
 
   const priorSpec: StrategySpec | null = response?.spec ?? null;
   const priorResult: BacktestResult | null = response?.result ?? null;
+
+  async function attachToThesis() {
+    const ev = response?.evidence_ledger?.[0];
+    const ticker = response?.spec?.ticker;
+    if (!ev || !ticker) {
+      setAttachMsg('No evidence to attach.');
+      return;
+    }
+    setAttaching(true);
+    setAttachMsg(null);
+    try {
+      const res = await attachEvidenceByTicker(ticker, ev);
+      setAttachMsg(
+        res.already_attached
+          ? 'Already attached to thesis.'
+          : 'Attached to thesis (thesis_evidence — origin unchanged).'
+      );
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } }; message?: string })?.response
+          ?.data?.detail ||
+        (e as { message?: string })?.message ||
+        'Attach failed';
+      setAttachMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   async function submit(q: string) {
     if (!user) {
@@ -132,10 +163,23 @@ export default function LabPage() {
                 <h2 className="font-mono text-lg font-bold text-txt-primary">
                   {spec.ticker} · SMA CROSSOVER
                 </h2>
-                <span className="font-mono text-micro uppercase text-txt-muted">
-                  {result.reproducibility.engine_version} · mode={response.mode}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-micro uppercase text-txt-muted">
+                    {result.reproducibility.engine_version} · mode={response.mode}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void attachToThesis()}
+                    disabled={attaching}
+                    className="rounded-sm border border-accent bg-accent/10 px-2.5 py-1 font-mono text-micro font-bold uppercase tracking-widest text-accent disabled:opacity-40"
+                  >
+                    {attaching ? '…' : 'ATTACH_TO_THESIS'}
+                  </button>
+                </div>
               </div>
+              {attachMsg && (
+                <p className="mt-2 font-mono text-micro text-txt-secondary">{attachMsg}</p>
+              )}
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <div className="font-mono text-micro uppercase text-txt-muted">Fast / Slow</div>

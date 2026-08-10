@@ -250,3 +250,40 @@ export function useEvaluateThesis() {
   });
 }
 
+export interface AttachEvidenceResult {
+  attached: boolean;
+  already_attached: boolean;
+  thesis: Thesis;
+  row?: Record<string, unknown>;
+}
+
+/** Attach Event Study / Backtest evidence to active thesis for ticker. */
+export async function attachEvidenceByTicker(
+  ticker: string,
+  evidence: Record<string, unknown>
+): Promise<AttachEvidenceResult> {
+  const client = await createThesisClient();
+  const { data } = await client.post<AttachEvidenceResult>(
+    '/api/theses/attach-by-ticker',
+    { ticker, evidence }
+  );
+  return data;
+}
+
+export function useAttachEvidenceByTicker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ticker,
+      evidence,
+    }: {
+      ticker: string;
+      evidence: Record<string, unknown>;
+    }) => attachEvidenceByTicker(ticker, evidence),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['theses'] });
+      queryClient.invalidateQueries({ queryKey: ['theses', vars.ticker] });
+    },
+  });
+}
+

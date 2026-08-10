@@ -28,6 +28,8 @@ export interface Thesis {
   origin_analysis_id?: number;
   origin_analysis_snapshot?: AnalysisSnapshot;
   origin_evidence?: Record<string, unknown>[];
+  /** Phase 4 — attached research; never Diff baseline */
+  attached_evidence?: Record<string, unknown>[];
   structured_kill_criteria?: Record<string, unknown>[];
   created_at: string;
   updated_at: string;

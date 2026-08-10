@@ -297,3 +297,108 @@ def get_thesis_history(user_id: str, access_token: str, thesis_id: str) -> list:
     except Exception as e:
         logger.error(f"Thesis history fetch error: {e}")
         return []
+
+
+def list_thesis_evidence(user_id: str, access_token: str, thesis_id: str) -> list:
+    """List attached research evidence for a thesis (not origin_evidence)."""
+    try:
+        client = get_supabase_client()
+        client.postgrest.auth(access_token)
+        response = (
+            client.table("thesis_evidence")
+            .select("*")
+            .eq("thesis_id", thesis_id)
+            .eq("user_id", user_id)
+            .order("attached_at", desc=False)
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        logger.error(f"thesis_evidence list error: {e}")
+        return []
+
+
+def attach_thesis_evidence(
+    user_id: str,
+    access_token: str,
+    thesis_id: str,
+    evidence: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Insert attached evidence row. Idempotent on (thesis_id, evidence_id).
+    Never writes theses.origin_evidence.
+    Returns { attached: bool, already_attached: bool, row, thesis }.
+    """
+    from stocksense.core.thesis_attach import AttachError, validate_attach_payload
+
+    client = get_supabase_client()
+    client.postgrest.auth(access_token)
+
+    thesis_resp = (
+        client.table("theses")
+        .select("*")
+        .eq("id", thesis_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not thesis_resp.data:
+        raise AttachError("Thesis not found")
+    thesis = thesis_resp.data[0]
+
+    normalized = validate_attach_payload(evidence, thesis["ticker"])
+    eid = normalized["id"]
+    etype = normalized["type"]
+
+    existing = (
+        client.table("thesis_evidence")
+        .select("*")
+        .eq("thesis_id", thesis_id)
+        .eq("evidence_id", eid)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return {
+            "attached": False,
+            "already_attached": True,
+            "row": existing.data[0],
+            "thesis": thesis,
+        }
+
+    insert = {
+        "thesis_id": thesis_id,
+        "user_id": user_id,
+        "evidence_id": eid,
+        "evidence_type": etype,
+        "evidence": normalized,
+    }
+    inserted = client.table("thesis_evidence").insert(insert).execute()
+    row = inserted.data[0] if inserted.data else insert
+    return {
+        "attached": True,
+        "already_attached": False,
+        "row": row,
+        "thesis": thesis,
+    }
+
+
+def get_active_thesis_for_ticker(
+    user_id: str, access_token: str, ticker: str
+) -> Optional[Dict[str, Any]]:
+    """Newest active thesis for ticker, or None."""
+    theses = get_user_theses(user_id, access_token, ticker)
+    for t in theses:
+        if (t.get("status") or "active") == "active":
+            return t
+    return theses[0] if theses else None
+
+
+def enrich_thesis_with_attachments(
+    user_id: str, access_token: str, thesis: Dict[str, Any]
+) -> Dict[str, Any]:
+    rows = list_thesis_evidence(user_id, access_token, thesis["id"])
+    out = dict(thesis)
+    out["attached_evidence"] = [r.get("evidence") for r in rows if r.get("evidence")]
+    out["attached_evidence_rows"] = rows
+    return out

@@ -134,10 +134,4 @@ Deployment will be added later.
 
 CatalystEdge AI is an educational and portfolio project. It does not provide financial advice.
 
-## Author
 
-**Sravya Nallagantula**
-
-- GitHub: https://github.com/SravyaNallagantula
-- LinkedIn: https://www.linkedin.com/in/sravyanallagantula/
-- Email: nsravya16@gmail.com
